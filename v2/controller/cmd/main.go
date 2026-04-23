@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -97,12 +98,16 @@ func main() {
 	// devbox node label
 	var devboxNodeLabel string
 	var acceptanceThreshold int
+	var stateChangeHandlerWorkers int
+	var stateChangeHandlerQueueSize int
 	// merge base image layers flag
 	var mergeBaseImageTopLayer bool
 	// default base image flag for setLvRemovable's temp container
 	var defaultBaseImage string
 	// when this option is enabled, the controller will set up the block io resource configuration of a devbox pod
 	var enableBlockIOResouce bool
+	// commit options: network mode
+	var networkMode string
 	flag.StringVar(
 		&defaultBaseImage,
 		"default-base-image",
@@ -227,6 +232,18 @@ func main() {
 		16,
 		"The minimum acceptance score for scheduling devbox to node. Default is 16, which means the node must have enough resources to run the devbox.",
 	)
+	flag.IntVar(
+		&stateChangeHandlerWorkers,
+		"state-change-handler-workers",
+		8,
+		"The number of concurrent workers handling state change events.",
+	)
+	flag.IntVar(
+		&stateChangeHandlerQueueSize,
+		"state-change-handler-queue-size",
+		4096,
+		"The buffered queue size for state change event processing.",
+	)
 	// merge base image layers flag
 	flag.BoolVar(
 		&mergeBaseImageTopLayer,
@@ -239,6 +256,12 @@ func main() {
 		"enable-block-io-resource",
 		false,
 		"If this option is set to true, the controller will set up the block io resource configuration of a devbox pod",
+	)
+	flag.StringVar(
+		&networkMode,
+		"network-mode",
+		commit.DefaultNetworkMode,
+		"The network mode for devbox containers during commit",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -401,14 +424,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	committer, err := commit.NewCommitter(
+	devboxCommitter, err := commit.NewCommitter(
 		registryAddr,
 		registryUser,
 		registryPassword,
 		mergeBaseImageTopLayer,
+		commit.DefaultDevboxSnapshotter,
+		networkMode,
 	)
 	if err != nil {
-		setupLog.Error(err, "unable to create committer")
+		setupLog.Error(err, "unable to create devbox committer")
+		os.Exit(1)
+	}
+
+	stargzCommitter, err := commit.NewCommitter(
+		registryAddr,
+		registryUser,
+		registryPassword,
+		mergeBaseImageTopLayer,
+		commit.DevboxStargzSnapshotter,
+		networkMode,
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to create stargz committer")
 		os.Exit(1)
 	}
 
@@ -418,17 +456,56 @@ func main() {
 	// }
 
 	stateChangeHandler := controller.EventHandler{
-		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
-		Recorder:            mgr.GetEventRecorderFor("state-change-handler"),
-		Committer:           committer,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("state-change-handler"),
+		Committers: map[string]commit.Committer{
+			commit.DefaultDevboxSnapshotter: devboxCommitter,
+			commit.DevboxStargzSnapshotter:  stargzCommitter,
+		},
 		CommitImageRegistry: registryAddr,
 		NodeName:            nodes.GetNodeName(),
 		Logger:              ctrl.Log.WithName("state-change-handler"),
 		DefaultBaseImage:    defaultBaseImage,
 	}
 
-	setupLog.Info("StateChangeHandler initialized", "nodeName", nodes.GetNodeName())
+	if stateChangeHandlerWorkers <= 0 {
+		setupLog.Info(
+			"invalid state-change-handler-workers, fallback to 1",
+			"stateChangeHandlerWorkers",
+			stateChangeHandlerWorkers,
+		)
+		stateChangeHandlerWorkers = 1
+	}
+	if stateChangeHandlerQueueSize <= 0 {
+		setupLog.Info(
+			"invalid state-change-handler-queue-size, fallback to workers*4",
+			"stateChangeHandlerQueueSize",
+			stateChangeHandlerQueueSize,
+		)
+		stateChangeHandlerQueueSize = stateChangeHandlerWorkers * 4
+	}
+
+	setupLog.Info(
+		"StateChangeHandler initialized",
+		"nodeName",
+		nodes.GetNodeName(),
+		"workers",
+		stateChangeHandlerWorkers,
+		"queueSize",
+		stateChangeHandlerQueueSize,
+	)
+	stateChangeEventQueue := make(chan *corev1.Event, stateChangeHandlerQueueSize)
+	for i := 0; i < stateChangeHandlerWorkers; i++ {
+		workerID := i + 1
+		go func(id int) {
+			for event := range stateChangeEventQueue {
+				if err := stateChangeHandler.Handle(context.TODO(), event); err != nil {
+					setupLog.Error(err, "failed to handle event", "event", event.Name, "workerID", id)
+				}
+			}
+		}(workerID)
+	}
 
 	watcher := stateChangeBroadcaster.StartEventWatcher(func(event *corev1.Event) {
 		setupLog.Info("Event received by watcher",
@@ -436,8 +513,14 @@ func main() {
 			"eventSourceHost", event.Source.Host,
 			"eventType", event.Type,
 			"eventReason", event.Reason)
-		if err := stateChangeHandler.Handle(context.TODO(), event); err != nil {
-			setupLog.Error(err, "failed to handle event", "event", event.Name)
+		select {
+		case stateChangeEventQueue <- event:
+		default:
+			setupLog.Info(
+				"state change event queue is full, dropping event",
+				"event", event.Name,
+				"eventReason", event.Reason,
+			)
 		}
 	})
 	defer watcher.Stop()

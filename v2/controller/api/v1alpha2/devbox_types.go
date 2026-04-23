@@ -48,8 +48,17 @@ const (
 	LabelDevBoxPartOf = "devbox"
 	// Index for pod node name
 	PodNodeNameIndex = "spec.nodeName"
-	// Pod runtime handler for devbox pod
-	PodRuntimeHandler = "devbox-runc"
+	// RuntimeClass names supported by devbox controller.
+	RuntimeClassDevboxRunc       = "devbox-runtime"
+	RuntimeClassDevboxStargzRunc = "devbox-stargz-runtime"
+	// Runtime handlers referenced by RuntimeClass.handler.
+	RuntimeHandlerDevboxRunc       = "devbox-runc"
+	RuntimeHandlerDevboxStargzRunc = "devbox-stargz-runc"
+	// Pod runtime handler for devbox pod (default handler).
+	PodRuntimeHandler = RuntimeHandlerDevboxRunc
+	// Snapshotter names used by devbox runtime classes.
+	SnapshotterDevbox = "devbox"
+	SnapshotterStargz = "stargz"
 )
 
 type DevboxState string
@@ -88,6 +97,23 @@ type NetworkSpec struct {
 	Type NetworkType `json:"type"`
 	// +kubebuilder:validation:Optional
 	ExtraPorts []corev1.ContainerPort `json:"extraPorts,omitempty"`
+}
+
+type KubeAccessRoleTemplate string
+
+const (
+	KubeAccessRoleTemplateView  KubeAccessRoleTemplate = "view"
+	KubeAccessRoleTemplateEdit  KubeAccessRoleTemplate = "edit"
+	KubeAccessRoleTemplateAdmin KubeAccessRoleTemplate = "admin"
+)
+
+type KubeAccessSpec struct {
+	// +kubebuilder:validation:Optional
+	Enabled bool `json:"enabled,omitempty"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=view;edit;admin
+	// +kubebuilder:default=edit
+	RoleTemplate KubeAccessRoleTemplate `json:"roleTemplate,omitempty"`
 }
 
 type Config struct {
@@ -164,6 +190,8 @@ type DevboxSpec struct {
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 	// +kubebuilder:validation:Optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+	// +kubebuilder:validation:Optional
+	KubeAccess *KubeAccessSpec `json:"kubeAccess,omitempty"`
 }
 
 type NetworkStatus struct {
@@ -249,6 +277,18 @@ type CommitRecord struct {
 	// +kubebuilder:validation:Enum=Success;Failed;Pending;Committing
 	// +kubebuilder:default=Pending
 	CommitStatus CommitStatus `json:"commitStatus"`
+
+	// RuntimeClassName is the runtime class used by this content record.
+	// +kubebuilder:validation:Optional
+	RuntimeClassName string `json:"runtimeClassName,omitempty"`
+
+	// RuntimeHandler is the runtime handler annotation used by this content record.
+	// +kubebuilder:validation:Optional
+	RuntimeHandler string `json:"runtimeHandler,omitempty"`
+
+	// Snapshotter is the containerd snapshotter used by this content record.
+	// +kubebuilder:validation:Optional
+	Snapshotter string `json:"snapshotter,omitempty"`
 }
 
 // CommitRecordMap is a map of commit records, key is the commit id

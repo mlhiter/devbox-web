@@ -1,0 +1,4 @@
+interface:
+  display_name: "Devbox API + Gateway Helper"
+  short_description: "Operate devbox APIs and codex gateway with JWT"
+  default_prompt: "Use $devbox-api-helper to call, validate, and troubleshoot the Devbox REST API and codex gateway for external clients, including codex-gateway session APIs and the required CODEX_GATEWAY_OPENAI_API_KEY plus CODEX_GATEWAY_OPENAI_BASE_URL for codex-gateway devbox creation."

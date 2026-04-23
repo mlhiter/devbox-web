@@ -1,0 +1,1680 @@
+components:
+  parameters:
+    ContainerName:
+      description: Optional container name. Defaults to the first container in the
+        Devbox pod.
+      in: query
+      name: container
+      required: false
+      schema:
+        example: devbox
+        type: string
+    DevboxName:
+      description: Devbox name. The server validates it as a Kubernetes DNS1123 subdomain.
+      in: path
+      name: name
+      required: true
+      schema:
+        example: demo-devbox
+        maxLength: 253
+        minLength: 1
+        pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+        type: string
+    DownloadFilename:
+      description: Optional filename override for the `Content-Disposition` response
+        header.
+      in: query
+      name: filename
+      required: false
+      schema:
+        example: app.txt
+        type: string
+    FileMode:
+      description: Optional octal file mode applied after upload, for example `644`
+        or `0644`.
+      in: query
+      name: mode
+      required: false
+      schema:
+        example: "0644"
+        pattern: ^[0-7]{3,4}$
+        type: string
+    FilePath:
+      description: Absolute or relative file path inside the Devbox container.
+      in: query
+      name: path
+      required: true
+      schema:
+        example: /home/devbox/project/app.txt
+        minLength: 1
+        type: string
+    TransferTimeoutSeconds:
+      description: 'Transfer timeout in seconds. Defaults to 300. Allowed range: 1
+        to 3600.'
+      in: query
+      name: timeoutSeconds
+      required: false
+      schema:
+        default: 300
+        example: 300
+        maximum: 3600
+        minimum: 1
+        type: integer
+    UpstreamID:
+      description: Optional label value used to filter Devboxes by `devbox.sealos.io/upstream-id`.
+      in: query
+      name: upstreamID
+      required: false
+      schema:
+        example: session-123
+        type: string
+  schemas:
+    CreateDevboxData:
+      additionalProperties: false
+      properties:
+        name:
+          example: demo-devbox
+          type: string
+        namespace:
+          example: ns-test
+          type: string
+        state:
+          example: Running
+          type: string
+      required:
+      - name
+      - namespace
+      - state
+      type: object
+    CreateDevboxKubeAccess:
+      additionalProperties: false
+      properties:
+        enabled:
+          example: true
+          type: boolean
+        roleTemplate:
+          enum:
+          - view
+          - edit
+          - admin
+          example: edit
+          type: string
+      type: object
+    CreateDevboxLabel:
+      additionalProperties: false
+      properties:
+        key:
+          example: app.kubernetes.io/component
+          type: string
+        value:
+          example: runtime
+          type: string
+      required:
+      - key
+      - value
+      type: object
+    CreateDevboxRequest:
+      additionalProperties: false
+      properties:
+        archiveAfterPauseTime:
+          example: 24h
+          type: string
+        env:
+          additionalProperties:
+            type: string
+          example:
+            FOO: bar
+            NODE_ENV: production
+          type: object
+        image:
+          example: registry.example.com/devbox/runtime:custom-v2
+          type: string
+        kubeAccess:
+          $ref: '#/components/schemas/CreateDevboxKubeAccess'
+        labels:
+          items:
+            $ref: '#/components/schemas/CreateDevboxLabel'
+          type: array
+        name:
+          example: demo-devbox
+          maxLength: 253
+          minLength: 1
+          pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+          type: string
+        pauseAt:
+          example: "2026-03-03T09:00:00Z"
+          format: date-time
+          type: string
+        upstreamID:
+          example: session-123
+          type: string
+      required:
+      - name
+      type: object
+    DestroyData:
+      additionalProperties: false
+      properties:
+        name:
+          example: demo-devbox
+          type: string
+        namespace:
+          example: ns-test
+          type: string
+        status:
+          example: deletion requested
+          type: string
+      required:
+      - name
+      - namespace
+      - status
+      type: object
+    DevboxStateSummary:
+      additionalProperties: false
+      properties:
+        phase:
+          example: Running
+          type: string
+        spec:
+          example: Running
+          type: string
+        status:
+          example: Running
+          type: string
+      required:
+      - spec
+      - status
+      - phase
+      type: object
+    ErrorResponse:
+      additionalProperties: false
+      properties:
+        code:
+          example: 400
+          type: integer
+        message:
+          example: 'invalid request body: unexpected EOF'
+          type: string
+      required:
+      - code
+      - message
+      type: object
+    ExecData:
+      additionalProperties: false
+      properties:
+        command:
+          example:
+          - sh
+          - -lc
+          - whoami
+          items:
+            type: string
+          type: array
+        container:
+          example: devbox
+          type: string
+        executedAt:
+          example: "2026-03-03T10:10:10Z"
+          format: date-time
+          type: string
+        exitCode:
+          description: May be `-1` when the SDK server does not report an exit code.
+          example: 0
+          type: integer
+        namespace:
+          example: ns-test
+          type: string
+        podName:
+          example: demo-devbox-7d9b5f7f45-s6j8n
+          type: string
+        stderr:
+          example: ""
+          type: string
+        stdout:
+          example: |
+            devbox
+          type: string
+      required:
+      - podName
+      - namespace
+      - container
+      - command
+      - exitCode
+      - stdout
+      - stderr
+      - executedAt
+      type: object
+    ExecRequest:
+      additionalProperties: false
+      properties:
+        command:
+          example:
+          - sh
+          - -lc
+          - whoami
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+        container:
+          example: devbox
+          type: string
+        cwd:
+          default: /home/devbox/workspace
+          example: /home/devbox/workspace
+          type: string
+        stdin:
+          example: |
+            echo hello from stdin
+          type: string
+        timeoutSeconds:
+          default: 30
+          example: 30
+          maximum: 600
+          minimum: 1
+          type: integer
+      required:
+      - command
+      type: object
+    GatewayInfo:
+      additionalProperties: false
+      properties:
+        port:
+          example: 1317
+          type: integer
+        token:
+          example: <signed-gateway-jwt>
+          type: string
+        uniqueID:
+          example: demo-unique-id
+          type: string
+        url:
+          example: https://devbox-gateway.staging-usw-1.sealos.io/codex/demo-unique-id
+          type: string
+      required:
+      - url
+      - token
+      - port
+      type: object
+    GetDevboxInfoData:
+      additionalProperties: false
+      properties:
+        creationTimestamp:
+          example: "2026-02-26T07:20:30Z"
+          format: date-time
+          type: string
+        deletionTimestamp:
+          example: null
+          format: date-time
+          type:
+          - string
+          - "null"
+        gateway:
+          oneOf:
+          - $ref: '#/components/schemas/GatewayInfo'
+          - type: "null"
+        name:
+          example: demo-devbox
+          type: string
+        ssh:
+          $ref: '#/components/schemas/SSHInfo'
+        state:
+          $ref: '#/components/schemas/DevboxStateSummary'
+      required:
+      - name
+      - creationTimestamp
+      - deletionTimestamp
+      - state
+      - ssh
+      type: object
+    HealthzData:
+      additionalProperties: false
+      properties:
+        status:
+          example: healthy
+          type: string
+      required:
+      - status
+      type: object
+    ListDevboxItem:
+      additionalProperties: false
+      properties:
+        creationTimestamp:
+          example: "2026-03-02T08:20:30Z"
+          format: date-time
+          type: string
+        deletionTimestamp:
+          example: null
+          format: date-time
+          type:
+          - string
+          - "null"
+        name:
+          example: demo-devbox
+          type: string
+        state:
+          $ref: '#/components/schemas/DevboxStateSummary'
+      required:
+      - name
+      - creationTimestamp
+      - deletionTimestamp
+      - state
+      type: object
+    ListDevboxesData:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ListDevboxItem'
+          type: array
+      required:
+      - items
+      type: object
+    RefreshPauseAtData:
+      additionalProperties: false
+      properties:
+        name:
+          example: demo-devbox
+          type: string
+        namespace:
+          example: ns-test
+          type: string
+        pauseAt:
+          example: "2026-03-03T12:00:00Z"
+          format: date-time
+          type: string
+        refreshedAt:
+          example: "2026-03-03T08:00:00Z"
+          format: date-time
+          type: string
+      required:
+      - name
+      - namespace
+      - pauseAt
+      - refreshedAt
+      type: object
+    RefreshPauseAtRequest:
+      additionalProperties: false
+      properties:
+        pauseAt:
+          example: "2026-03-03T12:00:00Z"
+          format: date-time
+          type: string
+      required:
+      - pauseAt
+      type: object
+    SSHInfo:
+      additionalProperties: false
+      properties:
+        command:
+          example: ssh -i <private-key-file> devbox@staging-usw-1.sealos.io -p 2233
+          type: string
+        host:
+          example: staging-usw-1.sealos.io
+          type: string
+        link:
+          example: ssh://devbox@staging-usw-1.sealos.io:2233
+          type: string
+        port:
+          example: 2233
+          type: integer
+        privateKeyBase64:
+          example: <base64-private-key>
+          type: string
+        privateKeyEncoding:
+          example: base64
+          type: string
+        target:
+          example: devbox@staging-usw-1.sealos.io -p 2233
+          type: string
+        user:
+          example: devbox
+          type: string
+      required:
+      - user
+      - host
+      - port
+      - target
+      - link
+      - command
+      - privateKeyEncoding
+      - privateKeyBase64
+      type: object
+    StateMutationData:
+      additionalProperties: false
+      properties:
+        name:
+          example: demo-devbox
+          type: string
+        namespace:
+          example: ns-test
+          type: string
+        state:
+          example: Paused
+          type: string
+      required:
+      - name
+      - namespace
+      - state
+      type: object
+    UploadData:
+      additionalProperties: false
+      properties:
+        container:
+          example: devbox
+          type: string
+        mode:
+          example: "0644"
+          type: string
+        name:
+          example: demo-devbox
+          type: string
+        namespace:
+          example: ns-test
+          type: string
+        path:
+          example: /home/devbox/project/a.txt
+          type: string
+        podName:
+          example: demo-devbox-7d9b5f7f45-s6j8n
+          type: string
+        sizeBytes:
+          example: 42
+          type: integer
+        timeoutSecond:
+          example: 300
+          type: integer
+        uploadedAt:
+          example: "2026-03-03T10:20:30Z"
+          format: date-time
+          type: string
+      required:
+      - name
+      - namespace
+      - podName
+      - container
+      - path
+      - sizeBytes
+      - mode
+      - uploadedAt
+      - timeoutSecond
+      type: object
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: JWT
+      description: HS256 JWT. Must include the `namespace` claim.
+      scheme: bearer
+      type: http
+info:
+  description: |-
+    OpenAPI contract for the standalone Devbox REST API served by `v2/server`.
+
+    ## Authentication
+
+    All business endpoints require `Authorization: Bearer <JWT>`.
+    The JWT must use `HS256` and include a `namespace` claim. Namespace is derived from the token only.
+
+    ## Response Model
+
+    Successful JSON responses use the envelope `{ code, message, data }`.
+    Error responses use `{ code, message }`.
+    `GET /api/v1/devbox/{name}/files/download` returns a binary stream on success and JSON on error.
+
+    ## Gateway Proxy
+
+    The runtime gateway proxy path is config-driven and intentionally not modeled as an OpenAPI path here.
+    Use `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access.
+  title: Devbox REST API (v2/server)
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /api/v1/devbox:
+    get:
+      description: Lists Devboxes in the namespace from the JWT. Optionally filters
+        by `upstreamID`.
+      operationId: listDevboxes
+      parameters:
+      - $ref: '#/components/parameters/UpstreamID'
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                items:
+                  summary: List response
+                  value:
+                    code: 200
+                    data:
+                      items:
+                      - creationTimestamp: "2026-03-02T08:20:30Z"
+                        deletionTimestamp: null
+                        name: demo-devbox
+                        state:
+                          phase: Running
+                          spec: Running
+                          status: Running
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/ListDevboxesData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Devbox list.
+        "400":
+          content:
+            application/json:
+              examples:
+                invalidUpstreamID:
+                  summary: Invalid upstreamID
+                  value:
+                    code: 400
+                    message: 'invalid upstreamID: a valid label must be an empty string
+                      or consist of alphanumeric characters, ''-'', ''_'' or ''.'',
+                      and must start and end with an alphanumeric character'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid query parameters.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "500":
+          content:
+            application/json:
+              examples:
+                listFailed:
+                  summary: List failure
+                  value:
+                    code: 500
+                    message: 'list devbox failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to list Devboxes.
+      summary: List Devboxes
+      tags:
+      - Devbox
+    post:
+      description: Creates a Devbox CR in the namespace carried by the JWT `namespace`
+        claim.
+      operationId: createDevbox
+      requestBody:
+        content:
+          application/json:
+            examples:
+              basic:
+                summary: Create with lifecycle and kube access
+                value:
+                  archiveAfterPauseTime: 24h
+                  env:
+                    FOO: bar
+                    NODE_ENV: production
+                  image: registry.example.com/devbox/runtime:custom-v2
+                  kubeAccess:
+                    enabled: true
+                    roleTemplate: edit
+                  labels:
+                  - key: app.kubernetes.io/component
+                    value: runtime
+                  name: demo-devbox
+                  pauseAt: "2026-03-03T09:00:00Z"
+                  upstreamID: session-123
+            schema:
+              $ref: '#/components/schemas/CreateDevboxRequest'
+        description: Devbox creation payload.
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              examples:
+                created:
+                  summary: Created
+                  value:
+                    code: 201
+                    data:
+                      name: demo-devbox
+                      namespace: ns-test
+                      state: Running
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/CreateDevboxData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Devbox created successfully.
+        "400":
+          content:
+            application/json:
+              examples:
+                invalidPauseAt:
+                  summary: Invalid pauseAt
+                  value:
+                    code: 400
+                    message: 'invalid pauseAt: must be RFC3339 format'
+                invalidRoleTemplate:
+                  summary: Invalid kube access role
+                  value:
+                    code: 400
+                    message: 'invalid kubeAccess.roleTemplate: must be one of view,
+                      edit, admin'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid request parameters.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "409":
+          content:
+            application/json:
+              examples:
+                conflict:
+                  summary: Existing Devbox
+                  value:
+                    code: 409
+                    message: devbox already exists
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox already exists.
+        "500":
+          content:
+            application/json:
+              examples:
+                createFailed:
+                  summary: Controller failure
+                  value:
+                    code: 500
+                    message: 'create devbox failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to create the Devbox.
+      summary: Create a Devbox
+      tags:
+      - Devbox
+  /api/v1/devbox/{name}:
+    delete:
+      description: Requests deletion of the Devbox resource.
+      operationId: destroyDevbox
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                deleted:
+                  summary: Delete request accepted
+                  value:
+                    code: 200
+                    data:
+                      name: demo-devbox
+                      namespace: ns-test
+                      status: deletion requested
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/DestroyData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Deletion requested.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  summary: Missing Devbox
+                  value:
+                    code: 404
+                    message: devbox not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox not found.
+        "500":
+          content:
+            application/json:
+              examples:
+                destroyFailed:
+                  summary: Delete failure
+                  value:
+                    code: 500
+                    message: 'destroy devbox failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to destroy Devbox.
+      summary: Destroy a Devbox
+      tags:
+      - Devbox
+    get:
+      description: Returns Devbox state, SSH connection info, and gateway access info
+        when the gateway route is configured.
+      operationId: getDevboxInfo
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                info:
+                  summary: Info with gateway
+                  value:
+                    code: 200
+                    data:
+                      creationTimestamp: "2026-02-26T07:20:30Z"
+                      deletionTimestamp: null
+                      gateway:
+                        port: 1317
+                        token: <signed-gateway-jwt>
+                        uniqueID: demo-unique-id
+                        url: https://devbox-gateway.staging-usw-1.sealos.io/codex/demo-unique-id
+                      name: demo-devbox
+                      ssh:
+                        command: ssh -i <private-key-file> devbox@staging-usw-1.sealos.io
+                          -p 2233
+                        host: staging-usw-1.sealos.io
+                        link: ssh://devbox@staging-usw-1.sealos.io:2233
+                        port: 2233
+                        privateKeyBase64: <base64-private-key>
+                        privateKeyEncoding: base64
+                        target: devbox@staging-usw-1.sealos.io -p 2233
+                        user: devbox
+                      state:
+                        phase: Running
+                        spec: Running
+                        status: Running
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/GetDevboxInfoData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Devbox info.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  summary: Missing Devbox
+                  value:
+                    code: 404
+                    message: devbox not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox not found.
+        "500":
+          content:
+            application/json:
+              examples:
+                privateKeyMissing:
+                  summary: Secret issue
+                  value:
+                    code: 500
+                    message: 'get devbox private key failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to assemble Devbox info.
+      summary: Get Devbox info
+      tags:
+      - Devbox
+  /api/v1/devbox/{name}/exec:
+    post:
+      description: Runs a synchronous command through the in-pod Devbox SDK server.
+      operationId: execDevboxCommand
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      requestBody:
+        content:
+          application/json:
+            examples:
+              basic:
+                summary: Simple command
+                value:
+                  command:
+                  - sh
+                  - -lc
+                  - whoami
+                  timeoutSeconds: 30
+              withStdin:
+                summary: Command with stdin
+                value:
+                  command:
+                  - python3
+                  - -c
+                  - import sys; print(sys.stdin.read())
+                  cwd: /home/devbox/workspace
+                  stdin: |
+                    hello from stdin
+            schema:
+              $ref: '#/components/schemas/ExecRequest'
+        description: Command execution payload.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                ok:
+                  summary: Successful exec
+                  value:
+                    code: 200
+                    data:
+                      command:
+                      - sh
+                      - -lc
+                      - whoami
+                      container: devbox
+                      executedAt: "2026-03-03T10:10:10Z"
+                      exitCode: 0
+                      namespace: ns-test
+                      podName: demo-devbox-7d9b5f7f45-s6j8n
+                      stderr: ""
+                      stdout: |
+                        devbox
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/ExecData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Command executed.
+        "400":
+          content:
+            application/json:
+              examples:
+                commandRequired:
+                  summary: Missing command
+                  value:
+                    code: 400
+                    message: command is required
+                containerInvalid:
+                  summary: Unknown container
+                  value:
+                    code: 400
+                    message: container "sidecar" not found
+                timeoutInvalid:
+                  summary: Invalid timeout
+                  value:
+                    code: 400
+                    message: timeoutSeconds must be in [1, 600]
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid command request.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                podNotFound:
+                  summary: Pod missing
+                  value:
+                    code: 404
+                    message: devbox pod not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox pod not found.
+        "409":
+          content:
+            application/json:
+              examples:
+                podNotRunning:
+                  summary: Pod not running
+                  value:
+                    code: 409
+                    message: 'devbox pod is not running: Pending'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox pod is not in a runnable state.
+        "500":
+          content:
+            application/json:
+              examples:
+                execFailed:
+                  summary: SDK server error
+                  value:
+                    code: 500
+                    message: 'exec command failed: some upstream error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Command execution failed.
+        "504":
+          content:
+            application/json:
+              examples:
+                timeout:
+                  summary: Exec timeout
+                  value:
+                    code: 504
+                    message: exec command timeout
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Command execution timed out.
+      summary: Execute a command in the Devbox pod
+      tags:
+      - Devbox
+  /api/v1/devbox/{name}/files/download:
+    get:
+      description: Returns a binary file stream on success. On failure, the endpoint
+        returns the standard JSON error response envelope.
+      operationId: downloadDevboxFile
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      - $ref: '#/components/parameters/FilePath'
+      - $ref: '#/components/parameters/TransferTimeoutSeconds'
+      - $ref: '#/components/parameters/ContainerName'
+      - $ref: '#/components/parameters/DownloadFilename'
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: Binary file stream.
+          headers:
+            Content-Disposition:
+              description: Download filename returned by the API.
+              schema:
+                example: attachment; filename="app.txt"
+                type: string
+            Content-Length:
+              description: Byte size when known.
+              schema:
+                example: "42"
+                type: string
+            X-Devbox-Path:
+              description: Resolved file path inside the Devbox.
+              schema:
+                example: /home/devbox/project/a.txt
+                type: string
+        "400":
+          content:
+            application/json:
+              examples:
+                pathRequired:
+                  summary: Missing path
+                  value:
+                    code: 400
+                    message: path is required
+                timeoutInvalid:
+                  summary: Invalid timeout
+                  value:
+                    code: 400
+                    message: timeoutSeconds must be in [1, 3600]
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid download request.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                fileNotFound:
+                  summary: File missing
+                  value:
+                    code: 404
+                    message: file not found
+                podNotFound:
+                  summary: Pod missing
+                  value:
+                    code: 404
+                    message: devbox pod not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Pod or file not found.
+        "409":
+          content:
+            application/json:
+              examples:
+                podNotRunning:
+                  summary: Pod not running
+                  value:
+                    code: 409
+                    message: 'devbox pod is not running: Pending'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox pod is not in a runnable state.
+        "500":
+          content:
+            application/json:
+              examples:
+                downloadFailed:
+                  summary: Download failure
+                  value:
+                    code: 500
+                    message: 'download file failed: some upstream error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Download failed.
+        "504":
+          content:
+            application/json:
+              examples:
+                timeout:
+                  summary: Download timeout
+                  value:
+                    code: 504
+                    message: download file timeout
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Download timed out.
+      summary: Download a file from the Devbox
+      tags:
+      - Files
+  /api/v1/devbox/{name}/files/upload:
+    post:
+      description: Streams raw file bytes to the in-pod Devbox SDK server. Use query
+        parameters for destination path and optional mode.
+      operationId: uploadDevboxFile
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      - $ref: '#/components/parameters/FilePath'
+      - $ref: '#/components/parameters/TransferTimeoutSeconds'
+      - $ref: '#/components/parameters/FileMode'
+      - $ref: '#/components/parameters/ContainerName'
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                uploaded:
+                  summary: Uploaded file
+                  value:
+                    code: 200
+                    data:
+                      container: devbox
+                      mode: "0644"
+                      name: demo-devbox
+                      namespace: ns-test
+                      path: /home/devbox/project/a.txt
+                      podName: demo-devbox-7d9b5f7f45-s6j8n
+                      sizeBytes: 42
+                      timeoutSecond: 300
+                      uploadedAt: "2026-03-03T10:20:30Z"
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/UploadData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: File uploaded.
+        "400":
+          content:
+            application/json:
+              examples:
+                emptyBody:
+                  summary: Empty request body
+                  value:
+                    code: 400
+                    message: request body is empty
+                modeInvalid:
+                  summary: Invalid mode
+                  value:
+                    code: 400
+                    message: 'invalid mode: must be octal digits like 644 or 0644'
+                pathRequired:
+                  summary: Missing path
+                  value:
+                    code: 400
+                    message: path is required
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid upload request.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                podNotFound:
+                  summary: Pod missing
+                  value:
+                    code: 404
+                    message: devbox pod not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Pod or target file endpoint not found.
+        "409":
+          content:
+            application/json:
+              examples:
+                podNotRunning:
+                  summary: Pod not running
+                  value:
+                    code: 409
+                    message: 'devbox pod is not running: Pending'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox pod is not in a runnable state.
+        "500":
+          content:
+            application/json:
+              examples:
+                uploadFailed:
+                  summary: Upload failure
+                  value:
+                    code: 500
+                    message: 'upload file failed: some upstream error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Upload failed.
+        "504":
+          content:
+            application/json:
+              examples:
+                timeout:
+                  summary: Upload timeout
+                  value:
+                    code: 504
+                    message: upload file timeout
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Upload timed out.
+      summary: Upload a file to the Devbox
+      tags:
+      - Files
+  /api/v1/devbox/{name}/pause:
+    post:
+      description: Sets the Devbox desired state to `Paused`.
+      operationId: pauseDevbox
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                paused:
+                  summary: Paused
+                  value:
+                    code: 200
+                    data:
+                      name: demo-devbox
+                      namespace: ns-test
+                      state: Paused
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/StateMutationData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Devbox paused.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  summary: Missing Devbox
+                  value:
+                    code: 404
+                    message: devbox not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox not found.
+        "500":
+          content:
+            application/json:
+              examples:
+                pauseFailed:
+                  summary: Pause failure
+                  value:
+                    code: 500
+                    message: 'pause devbox failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to pause Devbox.
+      summary: Pause a Devbox
+      tags:
+      - Devbox
+  /api/v1/devbox/{name}/pause/refresh:
+    post:
+      description: Updates the `pauseAt` lifecycle timestamp on an existing Devbox.
+      operationId: refreshDevboxPauseAt
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      requestBody:
+        content:
+          application/json:
+            examples:
+              basic:
+                summary: Refresh pauseAt
+                value:
+                  pauseAt: "2026-03-03T12:00:00Z"
+            schema:
+              $ref: '#/components/schemas/RefreshPauseAtRequest'
+        description: New `pauseAt` timestamp.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                refreshed:
+                  summary: Refreshed
+                  value:
+                    code: 200
+                    data:
+                      name: demo-devbox
+                      namespace: ns-test
+                      pauseAt: "2026-03-03T12:00:00Z"
+                      refreshedAt: "2026-03-03T08:00:00Z"
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/RefreshPauseAtData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: pauseAt updated.
+        "400":
+          content:
+            application/json:
+              examples:
+                pauseAtRequired:
+                  summary: Missing pauseAt
+                  value:
+                    code: 400
+                    message: pauseAt is required
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Invalid request body.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  summary: Missing Devbox
+                  value:
+                    code: 404
+                    message: devbox not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox not found.
+        "500":
+          content:
+            application/json:
+              examples:
+                refreshFailed:
+                  summary: Update failure
+                  value:
+                    code: 500
+                    message: 'refresh devbox pauseAt failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to update pauseAt.
+      summary: Refresh pauseAt
+      tags:
+      - Devbox
+  /api/v1/devbox/{name}/resume:
+    post:
+      description: Sets the Devbox desired state to `Running`.
+      operationId: resumeDevbox
+      parameters:
+      - $ref: '#/components/parameters/DevboxName'
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                running:
+                  summary: Running
+                  value:
+                    code: 200
+                    data:
+                      name: demo-devbox
+                      namespace: ns-test
+                      state: Running
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/StateMutationData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Devbox resumed.
+        "401":
+          content:
+            application/json:
+              examples:
+                invalidToken:
+                  summary: Invalid JWT
+                  value:
+                    code: 401
+                    message: invalid token
+                missingHeader:
+                  summary: Missing Authorization header
+                  value:
+                    code: 401
+                    message: missing Authorization header
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Missing or invalid bearer token.
+        "404":
+          content:
+            application/json:
+              examples:
+                notFound:
+                  summary: Missing Devbox
+                  value:
+                    code: 404
+                    message: devbox not found
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Devbox not found.
+        "500":
+          content:
+            application/json:
+              examples:
+                resumeFailed:
+                  summary: Resume failure
+                  value:
+                    code: 500
+                    message: 'resume devbox failed: some backend error'
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Failed to resume Devbox.
+      summary: Resume a Devbox
+      tags:
+      - Devbox
+  /healthz:
+    get:
+      description: Returns the API server health status. This endpoint is not authenticated.
+      operationId: getHealthz
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                healthy:
+                  summary: Healthy server
+                  value:
+                    code: 200
+                    data:
+                      status: healthy
+                    message: ok
+              schema:
+                additionalProperties: false
+                properties:
+                  code:
+                    example: 200
+                    type: integer
+                  data:
+                    $ref: '#/components/schemas/HealthzData'
+                  message:
+                    example: ok
+                    type: string
+                required:
+                - code
+                - message
+                - data
+                type: object
+          description: Healthy response.
+      security: []
+      summary: Health check
+      tags:
+      - System
+security:
+- bearerAuth: []
+servers:
+- description: Local development
+  url: http://localhost:8090
+- description: Example production
+  url: https://devbox-server.example.com
+- description: Custom
+  url: '{baseUrl}'
+  variables:
+    baseUrl:
+      default: https://devbox-server.example.com
+      description: Base URL of the Devbox API server
+tags:
+- description: Health and system-level endpoints.
+  name: System
+- description: Devbox lifecycle, info, and command execution endpoints.
+  name: Devbox
+- description: Binary file upload and download endpoints tunneled through the Devbox
+    SDK server.
+  name: Files

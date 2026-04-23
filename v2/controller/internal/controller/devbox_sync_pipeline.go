@@ -127,6 +127,7 @@ func (r *DevboxReconciler) syncPipelineSteps(
 		r.syncStartupConfigMapStep(devbox, recLabels),
 		r.syncNetworkStep(devbox, recLabels),
 		r.syncDevboxPhaseStep(devbox, recLabels),
+		r.syncKubeAccessStep(devbox, recLabels),
 		r.syncPodStep(devbox, recLabels),
 	}
 }
@@ -212,6 +213,16 @@ func (r *DevboxReconciler) syncSecret(
 				devbox,
 				latestSecret.Data["SEALOS_DEVBOX_JWT_SECRET"],
 			)
+			if isKubeAccessEnabled(devbox) {
+				latestSecret.Data[helper.ManagedKubeconfigSecretKey] = helper.RenderManagedKubeconfig(
+					devbox.Namespace,
+					"",
+					"",
+					"",
+				)
+			} else {
+				delete(latestSecret.Data, helper.ManagedKubeconfigSecretKey)
+			}
 			return r.Update(ctx, latestSecret)
 		})
 		return err
@@ -235,6 +246,18 @@ func (r *DevboxReconciler) syncSecret(
 			"SEALOS_DEVBOX_AUTHORIZED_KEYS": publicKey,
 		},
 	}
+	secret.Data["SEALOS_DEVBOX_ENV_PROFILE"] = helper.GenerateEnvProfile(
+		devbox,
+		secret.Data["SEALOS_DEVBOX_JWT_SECRET"],
+	)
+	if isKubeAccessEnabled(devbox) {
+		secret.Data[helper.ManagedKubeconfigSecretKey] = helper.RenderManagedKubeconfig(
+			devbox.Namespace,
+			"",
+			"",
+			"",
+		)
+	}
 
 	if err := controllerutil.SetControllerReference(devbox, secret, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference: %w", err)
@@ -244,6 +267,51 @@ func (r *DevboxReconciler) syncSecret(
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	return nil
+}
+
+func (r *DevboxReconciler) syncKubeAccessStep(
+	devbox *devboxv1alpha2.Devbox,
+	recLabels map[string]string,
+) devboxSyncPipelineStep {
+	return devboxSyncPipelineStep{
+		startLog:        "syncing kube access",
+		errorLog:        "sync kube access failed",
+		okLog:           "sync kube access success",
+		conditionType:   devboxv1alpha2.DevboxConditionKubeAccessSynced,
+		okConditionMsg:  "sync kube access succeeded",
+		errConditionFmt: "sync kube access failed: %v",
+		skip: func() bool {
+			return !isKubeAccessEnabled(devbox)
+		},
+		onSkip: func(ctx context.Context) {
+			_ = r.deleteManagedKubeAccess(ctx, devbox)
+			_ = r.setConditionWithRetry(ctx, devbox, metav1.Condition{
+				Type:    devboxv1alpha2.DevboxConditionKubeAccessSynced,
+				Status:  metav1.ConditionFalse,
+				Reason:  devboxv1alpha2.DevboxReasonNotConfigured,
+				Message: "kube access is not configured",
+			})
+		},
+		run: func(ctx context.Context) error {
+			return r.syncKubeAccess(ctx, devbox, recLabels)
+		},
+		onErrorEvent: &devboxSyncPipelineEvent{
+			eventType:  corev1.EventTypeWarning,
+			reason:     "Sync kube access failed",
+			messageFmt: "%v",
+			args: func(err error) []any {
+				return []any{err}
+			},
+		},
+		onSuccessEvent: &devboxSyncPipelineEvent{
+			eventType:  corev1.EventTypeNormal,
+			reason:     "Sync kube access success",
+			messageFmt: "Sync kube access success",
+			args: func(err error) []any {
+				return nil
+			},
+		},
+	}
 }
 
 func (r *DevboxReconciler) syncStartupConfigMapStep(
@@ -766,12 +834,24 @@ func (r *DevboxReconciler) syncPod(
 			if currentRecord == nil {
 				return errors.New("current record is nil")
 			}
+			if _, err := helper.EnsureCommitRecordRuntimeMetadata(
+				ctx,
+				r.Client,
+				currentRecord,
+				devbox.Spec.RuntimeClassName,
+			); err != nil {
+				return fmt.Errorf("failed to resolve runtime metadata: %w", err)
+			}
+			runtimeHandler := currentRecord.RuntimeHandler
+			if runtimeHandler == "" {
+				return fmt.Errorf("runtime handler is empty for devbox %s", devbox.Name)
+			}
 			// create a new pod with default image, with new content id
 			podOptions := []helper.DevboxPodOptions{
 				helper.WithPodImage(currentRecord.BaseImage),
 				helper.WithPodContentID(devbox.Status.ContentID),
 				helper.WithPodNodeName(currentRecord.Node),
-				helper.WithPodRuntimeHandler(devboxv1alpha2.PodRuntimeHandler),
+				helper.WithPodRuntimeHandler(runtimeHandler),
 			}
 			if r.MergeBaseImageTopLayer {
 				podOptions = append(podOptions, helper.WithPodInit(commit.AnnotationImageFromValue))
@@ -825,6 +905,24 @@ func (r *DevboxReconciler) syncPod(
 	return nil
 }
 
+func (r *DevboxReconciler) updateLastContainerStatus(
+	ctx context.Context,
+	devbox *devboxv1alpha2.Devbox,
+	pod *corev1.Pod,
+) error {
+	if len(pod.Status.ContainerStatuses) == 0 {
+		return nil
+	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latestDevbox := &devboxv1alpha2.Devbox{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(devbox), latestDevbox); err != nil {
+			return err
+		}
+		latestDevbox.Status.LastContainerStatus = pod.Status.ContainerStatuses[0]
+		return r.Status().Update(ctx, latestDevbox)
+	})
+}
+
 func (r *DevboxReconciler) deletePod(
 	ctx context.Context,
 	devbox *devboxv1alpha2.Devbox,
@@ -841,19 +939,9 @@ func (r *DevboxReconciler) deletePod(
 	}
 
 	// Update devbox status with container status if available
-	if len(pod.Status.ContainerStatuses) > 0 {
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			latestDevbox := &devboxv1alpha2.Devbox{}
-			if err := r.Get(ctx, client.ObjectKeyFromObject(devbox), latestDevbox); err != nil {
-				return err
-			}
-			latestDevbox.Status.LastContainerStatus = pod.Status.ContainerStatuses[0]
-			return r.Status().Update(ctx, latestDevbox)
-		})
-		if err != nil {
-			logger.Error(err, "failed to update devbox status")
-			return err
-		}
+	if err := r.updateLastContainerStatus(ctx, devbox, pod); err != nil {
+		logger.Error(err, "failed to update devbox status")
+		return err
 	}
 
 	// Remove finalizer and delete pod with retry and UID check
@@ -1005,6 +1093,13 @@ func (r *DevboxReconciler) generateDevboxPod(
 	}
 	volumeMounts = append(volumeMounts, helper.GenerateEnvProfileVolumeMount()...)
 
+	if isKubeAccessEnabled(devbox) {
+		volumes = append(volumes, helper.GenerateManagedKubeAccessTokenVolume())
+		volumes = append(volumes, helper.GenerateManagedKubeconfigVolume(devbox))
+		volumeMounts = append(volumeMounts, helper.GenerateManagedKubeAccessTokenVolumeMount()...)
+		volumeMounts = append(volumeMounts, helper.GenerateManagedKubeconfigVolumeMount()...)
+	}
+
 	containers := []corev1.Container{
 		{
 			Name: devbox.Name,
@@ -1058,6 +1153,12 @@ func (r *DevboxReconciler) generateDevboxPod(
 
 	for _, opt := range opts {
 		opt(expectPod)
+	}
+
+	if isKubeAccessEnabled(devbox) {
+		helper.WithPodServiceAccountName(helper.GenerateManagedKubeAccessServiceAccountName(devbox))(expectPod)
+		helper.WithPodKubeconfigEnv()(expectPod)
+		expectPod.Spec.AutomountServiceAccountToken = ptr.To(false)
 	}
 
 	return expectPod

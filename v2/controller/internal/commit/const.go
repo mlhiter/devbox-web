@@ -9,6 +9,7 @@ const (
 	DefaultNerdctlDataRoot      = "/var/lib/containerd"
 	DefaultNerdctlHostsDir      = "/etc/containerd/certs.d"
 	DefaultDevboxSnapshotter    = "devbox"
+	DevboxStargzSnapshotter     = "stargz"
 	DefaultNetworkMode          = "none"
 	DefaultRemoveImageAsync     = true
 	DefaultRemoveImageForce     = false
@@ -19,12 +20,13 @@ const (
 	AnnotationKeyNamespace               = "namespace"
 	AnnotationKeyImageName               = "image.name"
 	AnnotationImageFromValue             = "true"
-	AnnotationUseLimitValue              = "1Gi"
 	DevboxOptionsRemoveBaseImageTopLayer = true
 
 	SnapshotLabelPrefix  = "containerd.io/snapshot/devbox-"
 	ContainerLabelPrefix = "devbox.sealos.io/"
 	RemoveContentIDkey   = "containerd.io/snapshot/devbox-remove-content-id"
+
+	DefaultStargzPrefetchSize = 10 * 1024 * 1024
 
 	DefaultMaxRetries = 3
 	DefaultRetryDelay = 5 * time.Second

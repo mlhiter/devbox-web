@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
+	"github.com/sealos-apps/devbox/v2/controller/internal/controller/helper"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/events"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/matcher"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/resource"
@@ -76,14 +77,18 @@ type DevboxReconciler struct {
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=node.k8s.io,resources=runtimeclasses,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods,verbs=*
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=nodes/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=services,verbs=*
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=*
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=*
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=*
 // +kubebuilder:rbac:groups="",resources=events,verbs=*
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=*
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=*
 
 func (r *DevboxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("devbox", req.NamespacedName)
@@ -211,13 +216,34 @@ func (r *DevboxReconciler) initDevboxStatus(
 
 	// init devbox status commit record for current content id
 	if devbox.Status.CommitRecords[currentContentID] == nil {
+		runtimeClassName := helper.ResolveRuntimeClassName(devbox.Spec.RuntimeClassName)
 		devbox.Status.CommitRecords[currentContentID] = &devboxv1alpha2.CommitRecord{
-			Node:         "",
-			BaseImage:    devbox.Spec.Image,
-			CommitImage:  r.generateImageName(devbox),
-			CommitStatus: devboxv1alpha2.CommitStatusPending,
-			GenerateTime: metav1.Now(),
+			Node:             "",
+			BaseImage:        devbox.Spec.Image,
+			CommitImage:      r.generateImageName(devbox),
+			CommitStatus:     devboxv1alpha2.CommitStatusPending,
+			GenerateTime:     metav1.Now(),
+			RuntimeClassName: runtimeClassName,
 		}
+		if _, err := helper.EnsureCommitRecordRuntimeMetadata(
+			ctx,
+			r.Client,
+			devbox.Status.CommitRecords[currentContentID],
+			runtimeClassName,
+		); err != nil {
+			return false, err
+		}
+		changed = true
+	}
+
+	if metadataChanged, err := helper.EnsureCommitRecordRuntimeMetadata(
+		ctx,
+		r.Client,
+		devbox.Status.CommitRecords[currentContentID],
+		devbox.Spec.RuntimeClassName,
+	); err != nil {
+		return false, err
+	} else if metadataChanged {
 		changed = true
 	}
 
@@ -564,7 +590,7 @@ func (r *DevboxReconciler) handleStorageDelete(
 	}
 
 	// Validate and get commit record
-	commitRecord, err := r.validateAndGetCommitRecord(devbox)
+	commitRecord, err := r.validateAndGetCommitRecord(ctx, devbox)
 	if err != nil {
 		logger.Error(err, "failed to validate commit record", "devbox", devbox.Name)
 		return err
@@ -591,6 +617,7 @@ func (r *DevboxReconciler) isStorageAlreadyCleanedUp(devbox *devboxv1alpha2.Devb
 
 // validateAndGetCommitRecord validates devbox status and returns the current commit record
 func (r *DevboxReconciler) validateAndGetCommitRecord(
+	ctx context.Context,
 	devbox *devboxv1alpha2.Devbox,
 ) (*devboxv1alpha2.CommitRecord, error) {
 	contentID := devbox.Status.ContentID
@@ -613,6 +640,14 @@ func (r *DevboxReconciler) validateAndGetCommitRecord(
 
 	if commitRecord.BaseImage == "" {
 		return nil, fmt.Errorf("baseImage is empty in commit record for devbox %s", devbox.Name)
+	}
+	if _, err := helper.EnsureCommitRecordRuntimeMetadata(
+		ctx,
+		r.Client,
+		commitRecord,
+		devbox.Spec.RuntimeClassName,
+	); err != nil {
+		return nil, fmt.Errorf("failed to resolve runtime metadata for devbox %s: %w", devbox.Name, err)
 	}
 
 	return commitRecord, nil
@@ -644,6 +679,10 @@ func (r *DevboxReconciler) requestStorageCleanup(
 			devbox.Name,
 			devbox.Status.ContentID,
 			commitRecord.BaseImage,
+			devbox.Spec.StorageLimit,
+			commitRecord.Snapshotter,
+			commitRecord.RuntimeClassName,
+			commitRecord.RuntimeHandler,
 		),
 		corev1.EventTypeNormal,
 		events.ReasonStorageCleanupRequested,

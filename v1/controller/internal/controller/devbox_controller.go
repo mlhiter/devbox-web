@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -309,24 +310,35 @@ func (r *DevboxReconciler) syncSecret(ctx context.Context, devbox *devboxv1alpha
 	err := r.Get(ctx, client.ObjectKey{Namespace: devbox.Namespace, Name: devbox.Name}, devboxSecret)
 	if err == nil {
 		// Secret already exists, no need to create
+		if devboxSecret.Data == nil {
+			devboxSecret.Data = make(map[string][]byte)
+		}
+
+		updated := false
 
 		// TODO: delete this code after we have a way to sync secret to devbox
 		// check if SEALOS_DEVBOX_JWT_SECRET is exist, if not exist, create it
 		if _, ok := devboxSecret.Data["SEALOS_DEVBOX_JWT_SECRET"]; !ok {
 			devboxSecret.Data["SEALOS_DEVBOX_JWT_SECRET"] = []byte(rand.String(32))
-			if err := r.Update(ctx, devboxSecret); err != nil {
-				return fmt.Errorf("failed to update secret: %w", err)
-			}
+			updated = true
 		}
 
 		// generate SEALOS_DEVBOX_ENV_PROFILE
-		devboxSecret.Data["SEALOS_DEVBOX_ENV_PROFILE"] = helper.GenerateEnvProfile(
+		envProfile := helper.GenerateEnvProfile(
 			devbox,
 			devboxSecret.Data["SEALOS_DEVBOX_JWT_SECRET"],
 		)
+		if !bytes.Equal(devboxSecret.Data["SEALOS_DEVBOX_ENV_PROFILE"], envProfile) {
+			devboxSecret.Data["SEALOS_DEVBOX_ENV_PROFILE"] = envProfile
+			updated = true
+		}
 
 		if _, ok := devboxSecret.Data["SEALOS_DEVBOX_AUTHORIZED_KEYS"]; !ok {
 			devboxSecret.Data["SEALOS_DEVBOX_AUTHORIZED_KEYS"] = devboxSecret.Data["SEALOS_DEVBOX_PUBLIC_KEY"]
+			updated = true
+		}
+
+		if updated {
 			if err := r.Update(ctx, devboxSecret); err != nil {
 				return fmt.Errorf("failed to update secret: %w", err)
 			}

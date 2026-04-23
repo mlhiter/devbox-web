@@ -15,6 +15,7 @@
 package helper
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
@@ -27,12 +28,36 @@ import (
 	"github.com/sealos-apps/devbox/v2/controller/label"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
+	nodev1 "k8s.io/api/node/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	DevBoxPartOf = "devbox"
+
+	ManagedKubeAccessNameSuffix = "kubeaccess"
+
+	ManagedKubeAccessTokenVolumeName      = "devbox-kube-api-access"
+	ManagedKubeAccessTokenMountPath       = "/var/run/sealos/kube-api-access"
+	ManagedKubeAccessTokenFilePath        = ManagedKubeAccessTokenMountPath + "/token"
+	ManagedKubeAccessTokenCAFilePath      = ManagedKubeAccessTokenMountPath + "/ca.crt"
+	ManagedKubeAccessTokenNamespacePath   = ManagedKubeAccessTokenMountPath + "/namespace"
+	ManagedKubeAccessDefaultTokenDuration = int64(3600)
+
+	ManagedKubeconfigVolumeName  = "devbox-kubeconfig"
+	ManagedKubeconfigMountPath   = "/var/run/sealos/kubeconfig/config"
+	ManagedKubeconfigEnvName     = "KUBECONFIG"
+	ManagedKubeconfigSecretKey   = "SEALOS_DEVBOX_KUBECONFIG"
+	ManagedKubeconfigClusterName = "in-cluster"
+	ManagedKubeconfigContextName = "devbox-context"
+	ManagedKubeconfigUserName    = "devbox-user"
+	ManagedKubeconfigDefaultNS   = "default"
+	ManagedKubeconfigDefaultHost = "https://kubernetes.default.svc"
+	KubeRootCAConfigMapName      = "kube-root-ca.crt"
+	KubeRootCAConfigMapKey       = "ca.crt"
 )
 
 type DevboxPodOptions func(pod *corev1.Pod)
@@ -59,6 +84,89 @@ func WithPodRuntimeHandler(runtime string) DevboxPodOptions {
 		}
 		pod.Annotations[devboxv1alpha2.AnnotationRuntime] = runtime
 	}
+}
+
+func ResolveRuntimeClassName(runtimeClassName string) string {
+	if strings.TrimSpace(runtimeClassName) == "" {
+		return devboxv1alpha2.RuntimeClassDevboxRunc
+	}
+	return strings.TrimSpace(runtimeClassName)
+}
+
+func ResolveSnapshotterByHandler(runtimeHandler string) string {
+	switch strings.TrimSpace(runtimeHandler) {
+	case devboxv1alpha2.RuntimeHandlerDevboxStargzRunc:
+		return devboxv1alpha2.SnapshotterStargz
+	default:
+		return devboxv1alpha2.SnapshotterDevbox
+	}
+}
+
+type RuntimeMetadata struct {
+	RuntimeClassName string
+	RuntimeHandler   string
+	Snapshotter      string
+}
+
+func ResolveRuntimeMetadata(
+	ctx context.Context,
+	reader client.Reader,
+	runtimeClassName string,
+) (RuntimeMetadata, error) {
+	resolvedClassName := ResolveRuntimeClassName(runtimeClassName)
+	if reader == nil {
+		return RuntimeMetadata{}, fmt.Errorf("runtime class reader is nil")
+	}
+
+	runtimeClass := &nodev1.RuntimeClass{}
+	if err := reader.Get(ctx, types.NamespacedName{Name: resolvedClassName}, runtimeClass); err != nil {
+		return RuntimeMetadata{}, fmt.Errorf("failed to get RuntimeClass %q: %w", resolvedClassName, err)
+	}
+
+	runtimeHandler := strings.TrimSpace(runtimeClass.Handler)
+	if runtimeHandler == "" {
+		return RuntimeMetadata{}, fmt.Errorf("RuntimeClass %q has empty handler", resolvedClassName)
+	}
+
+	return RuntimeMetadata{
+		RuntimeClassName: resolvedClassName,
+		RuntimeHandler:   runtimeHandler,
+		Snapshotter:      ResolveSnapshotterByHandler(runtimeHandler),
+	}, nil
+}
+
+func EnsureCommitRecordRuntimeMetadata(
+	ctx context.Context,
+	reader client.Reader,
+	record *devboxv1alpha2.CommitRecord,
+	defaultRuntimeClassName string,
+) (bool, error) {
+	if record == nil {
+		return false, nil
+	}
+	runtimeClassName := ResolveRuntimeClassName(defaultRuntimeClassName)
+	if record.RuntimeClassName != "" {
+		runtimeClassName = ResolveRuntimeClassName(record.RuntimeClassName)
+	}
+	metadata, err := ResolveRuntimeMetadata(ctx, reader, runtimeClassName)
+	if err != nil {
+		return false, err
+	}
+
+	changed := false
+	if record.RuntimeClassName != runtimeClassName {
+		record.RuntimeClassName = runtimeClassName
+		changed = true
+	}
+	if record.RuntimeHandler != metadata.RuntimeHandler {
+		record.RuntimeHandler = metadata.RuntimeHandler
+		changed = true
+	}
+	if record.Snapshotter != metadata.Snapshotter {
+		record.Snapshotter = metadata.Snapshotter
+		changed = true
+	}
+	return changed, nil
 }
 
 func WithPodInit(init string) DevboxPodOptions {
@@ -95,6 +203,30 @@ func WithPodLabels(labels map[string]string) DevboxPodOptions {
 func WithPodNodeName(nodeName string) DevboxPodOptions {
 	return func(pod *corev1.Pod) {
 		pod.Spec.NodeName = nodeName
+	}
+}
+
+func WithPodServiceAccountName(serviceAccountName string) DevboxPodOptions {
+	return func(pod *corev1.Pod) {
+		pod.Spec.ServiceAccountName = strings.TrimSpace(serviceAccountName)
+	}
+}
+
+func WithPodKubeconfigEnv() DevboxPodOptions {
+	return func(pod *corev1.Pod) {
+		if len(pod.Spec.Containers) == 0 {
+			return
+		}
+		envVar := corev1.EnvVar{Name: ManagedKubeconfigEnvName, Value: ManagedKubeconfigMountPath}
+		container := &pod.Spec.Containers[0]
+		for i := range container.Env {
+			if container.Env[i].Name == ManagedKubeconfigEnvName {
+				container.Env[i].Value = ManagedKubeconfigMountPath
+				container.Env[i].ValueFrom = nil
+				return
+			}
+		}
+		container.Env = append(container.Env, envVar)
 	}
 }
 
@@ -170,6 +302,11 @@ func GenerateEnvProfile(devbox *devboxv1alpha2.Devbox, devboxJWTSecret []byte) [
 	envProfile = append(
 		envProfile,
 		[]byte(fmt.Sprintf("export DEVBOX_JWT_SECRET=\"%s\"\n", devboxJWTSecret))...)
+	if devbox != nil && devbox.Spec.KubeAccess != nil && devbox.Spec.KubeAccess.Enabled {
+		envProfile = append(
+			envProfile,
+			[]byte(fmt.Sprintf("export %s=\"%s\"\n", ManagedKubeconfigEnvName, ManagedKubeconfigMountPath))...)
+	}
 	return envProfile
 }
 
@@ -347,5 +484,159 @@ func GenerateStartupVolumeMounts() []corev1.VolumeMount {
 			SubPath:   "startup.sh",
 			ReadOnly:  true,
 		},
+	}
+}
+
+func GenerateManagedKubeAccessServiceAccountName(devbox *devboxv1alpha2.Devbox) string {
+	return fmt.Sprintf("%s-%s", devbox.Name, ManagedKubeAccessNameSuffix)
+}
+
+func GenerateManagedKubeAccessRoleBindingName(devbox *devboxv1alpha2.Devbox) string {
+	return fmt.Sprintf("%s-%s", devbox.Name, ManagedKubeAccessNameSuffix)
+}
+
+func RenderManagedKubeconfig(
+	namespace string,
+	server string,
+	caFilePath string,
+	tokenFilePath string,
+) []byte {
+	resolvedNamespace := strings.TrimSpace(namespace)
+	if resolvedNamespace == "" {
+		resolvedNamespace = ManagedKubeconfigDefaultNS
+	}
+	resolvedServer := strings.TrimSpace(server)
+	if resolvedServer == "" {
+		resolvedServer = ManagedKubeconfigDefaultHost
+	}
+	resolvedCAFilePath := strings.TrimSpace(caFilePath)
+	if resolvedCAFilePath == "" {
+		resolvedCAFilePath = ManagedKubeAccessTokenCAFilePath
+	}
+	resolvedTokenFilePath := strings.TrimSpace(tokenFilePath)
+	if resolvedTokenFilePath == "" {
+		resolvedTokenFilePath = ManagedKubeAccessTokenFilePath
+	}
+
+	return []byte(fmt.Sprintf(`apiVersion: v1
+kind: Config
+clusters:
+- name: %s
+  cluster:
+    server: %s
+    certificate-authority: %s
+contexts:
+- name: %s
+  context:
+    cluster: %s
+    user: %s
+    namespace: %s
+current-context: %s
+users:
+- name: %s
+  user:
+    tokenFile: %s
+`,
+		ManagedKubeconfigClusterName,
+		resolvedServer,
+		resolvedCAFilePath,
+		ManagedKubeconfigContextName,
+		ManagedKubeconfigClusterName,
+		ManagedKubeconfigUserName,
+		resolvedNamespace,
+		ManagedKubeconfigContextName,
+		ManagedKubeconfigUserName,
+		resolvedTokenFilePath,
+	))
+}
+
+func GenerateManagedKubeAccessTokenVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: ManagedKubeAccessTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				DefaultMode: ptr.To(int32(420)),
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Path:              "token",
+							ExpirationSeconds: ptr.To(ManagedKubeAccessDefaultTokenDuration),
+						},
+					},
+					{
+						ConfigMap: &corev1.ConfigMapProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: KubeRootCAConfigMapName,
+							},
+							Items: []corev1.KeyToPath{
+								{
+									Key:  KubeRootCAConfigMapKey,
+									Path: "ca.crt",
+								},
+							},
+						},
+					},
+					{
+						DownwardAPI: &corev1.DownwardAPIProjection{
+							Items: []corev1.DownwardAPIVolumeFile{
+								{
+									Path: "namespace",
+									FieldRef: &corev1.ObjectFieldSelector{
+										APIVersion: "v1",
+										FieldPath:  "metadata.namespace",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func GenerateManagedKubeAccessTokenVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      ManagedKubeAccessTokenVolumeName,
+			MountPath: ManagedKubeAccessTokenMountPath,
+			ReadOnly:  true,
+		},
+	}
+}
+
+func GenerateManagedKubeconfigVolume(devbox *devboxv1alpha2.Devbox) corev1.Volume {
+	return corev1.Volume{
+		Name: ManagedKubeconfigVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: devbox.Name,
+				Items: []corev1.KeyToPath{
+					{
+						Key:  ManagedKubeconfigSecretKey,
+						Path: "config",
+					},
+				},
+				DefaultMode: ptr.To(int32(420)),
+			},
+		},
+	}
+}
+
+func GenerateManagedKubeconfigVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
+		{
+			Name:      ManagedKubeconfigVolumeName,
+			MountPath: ManagedKubeconfigMountPath,
+			SubPath:   "config",
+			ReadOnly:  true,
+		},
+	}
+}
+
+func GenerateManagedKubeconfigEnvVar() corev1.EnvVar {
+	return corev1.EnvVar{
+		Name:  ManagedKubeconfigEnvName,
+		Value: ManagedKubeconfigMountPath,
 	}
 }

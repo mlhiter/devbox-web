@@ -11,6 +11,7 @@ rules:
   - events
   - pods
   - secrets
+  - serviceaccounts
   - services
   verbs:
   - '*'
@@ -65,3 +66,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - node.k8s.io
+  resources:
+  - runtimeclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - '*'
