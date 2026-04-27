@@ -24,27 +24,38 @@ jobs:
         include:
           - name: v1-controller
             image_name: devbox-v1-controller
-            workdir: v1/controller
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             platforms: linux/amd64,linux/arm64
           - name: v2-controller
             image_name: devbox-v2-controller
-            workdir: v2/controller
             dockerfile: v2/controller/Dockerfile
             context: v2/controller
             platforms: linux/amd64,linux/arm64
           - name: v1-frontend
             image_name: devbox-v1-frontend
-            workdir: v1/frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
             platforms: linux/amd64,linux/arm64
           - name: v2-frontend
             image_name: devbox-v2-frontend
-            workdir: v2/frontend
             dockerfile: v2/frontend/Dockerfile
             context: v2/frontend
+            platforms: linux/amd64,linux/arm64
+          - name: v2-server
+            image_name: devbox-v2-server
+            dockerfile: v2/server/Dockerfile
+            context: v2/server
+            platforms: linux/amd64,linux/arm64
+          - name: v2-httpgate
+            image_name: devbox-v2-httpgate
+            dockerfile: v2/httpgate/Dockerfile
+            context: v2/httpgate
+            platforms: linux/amd64,linux/arm64
+          - name: v2-sshgate
+            image_name: devbox-v2-sshgate
+            dockerfile: v2/sshgate/Dockerfile
+            context: v2/sshgate
             platforms: linux/amd64,linux/arm64
     steps:
       - name: Checkout

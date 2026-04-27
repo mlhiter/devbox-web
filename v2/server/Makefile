@@ -1,4 +1,4 @@
-IMG ?= ghcr.io/labring/devbox-api:latest
+IMG ?= ghcr.io/sealos-apps/devbox-v2-server:latest
 TARGETOS ?= linux
 TARGETARCH ?= amd64
 GOCACHE ?= /tmp/go-build

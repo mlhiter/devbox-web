@@ -124,7 +124,7 @@ spec:
       serviceAccountName: devbox-server
       containers:
         - name: devbox-server
-          image: registry.cn-hangzhou.aliyuncs.com/lingdie/devbox-server:4.15.2
+          image: ghcr.io/sealos-apps/devbox-v2-server:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: POD_NAME

@@ -11,6 +11,7 @@ permissions:
 
 env:
   GO_VERSION: "1.25.3"
+  RUST_TOOLCHAIN: "stable"
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
 
@@ -41,6 +42,21 @@ jobs:
             image_name: devbox-v2-frontend
             dockerfile: v2/frontend/Dockerfile
             context: v2/frontend
+            platforms: linux/amd64,linux/arm64
+          - name: v2-server
+            image_name: devbox-v2-server
+            dockerfile: v2/server/Dockerfile
+            context: v2/server
+            platforms: linux/amd64,linux/arm64
+          - name: v2-httpgate
+            image_name: devbox-v2-httpgate
+            dockerfile: v2/httpgate/Dockerfile
+            context: v2/httpgate
+            platforms: linux/amd64,linux/arm64
+          - name: v2-sshgate
+            image_name: devbox-v2-sshgate
+            dockerfile: v2/sshgate/Dockerfile
+            context: v2/sshgate
             platforms: linux/amd64,linux/arm64
     steps:
       - name: Checkout
@@ -149,6 +165,114 @@ jobs:
           path: v1/cri-shim/bin/*
           if-no-files-found: error
 
+  v2-server-binaries:
+    name: Release Binary / v2-server
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_arch: amd64
+          - target_arch: arm64
+    defaults:
+      run:
+        working-directory: v2/server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: v2/server/go.sum
+
+      - name: Build server release binary
+        run: make build TARGETARCH=${{ matrix.target_arch }}
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-server-binaries-${{ matrix.target_arch }}
+          path: v2/server/bin/devbox-api-${{ matrix.target_arch }}
+          if-no-files-found: error
+
+  v2-httpgate-chart:
+    name: Release Artifact / v2-httpgate-chart
+    runs-on: ubuntu-latest
+    env:
+      HTTPGATE_APP_VERSION: ${{ github.ref_name }}
+      HTTPGATE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/devbox-v2-httpgate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Package httpgate chart
+        run: |
+          workdir=$(mktemp -d)
+          mkdir -p /tmp/httpgate-chart
+          cp -R v2/httpgate/deploy/charts/httpgate "$workdir/httpgate"
+          sed -i.bak "s#^appVersion: .*#appVersion: \"${HTTPGATE_APP_VERSION}\"#" "$workdir/httpgate/Chart.yaml"
+          sed -i.bak "s#^  repository: .*#  repository: ${HTTPGATE_IMAGE_REPOSITORY}#" "$workdir/httpgate/values.yaml"
+          rm "$workdir/httpgate/Chart.yaml.bak" "$workdir/httpgate/values.yaml.bak"
+          tar -C "$workdir" -czf /tmp/httpgate-chart/devbox-v2-httpgate-chart-${{ github.ref_name }}.tgz httpgate
+
+      - name: Upload httpgate chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-httpgate-chart
+          path: /tmp/httpgate-chart/devbox-v2-httpgate-chart-${{ github.ref_name }}.tgz
+          if-no-files-found: error
+
+  v2-sshgate-chart:
+    name: Release Artifact / v2-sshgate-chart
+    runs-on: ubuntu-latest
+    env:
+      SSHGATE_APP_VERSION: ${{ github.ref_name }}
+      SSHGATE_IMAGE: ghcr.io/${{ github.repository_owner }}/devbox-v2-sshgate:${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Package sshgate chart
+        run: |
+          workdir=$(mktemp -d)
+          mkdir -p /tmp/sshgate-chart
+          cp -R v2/sshgate/deploy/charts/sshgate "$workdir/sshgate"
+          sed -i.bak "s#^appVersion: .*#appVersion: \"${SSHGATE_APP_VERSION}\"#" "$workdir/sshgate/Chart.yaml"
+          sed -i.bak "s#^image: .*#image: ${SSHGATE_IMAGE}#" "$workdir/sshgate/values.yaml"
+          rm "$workdir/sshgate/Chart.yaml.bak" "$workdir/sshgate/values.yaml.bak"
+          tar -C "$workdir" -czf /tmp/sshgate-chart/devbox-v2-sshgate-chart-${{ github.ref_name }}.tgz sshgate
+
+      - name: Upload sshgate chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-sshgate-chart
+          path: /tmp/sshgate-chart/devbox-v2-sshgate-chart-${{ github.ref_name }}.tgz
+          if-no-files-found: error
+
+  v2-server-manifest:
+    name: Release Artifact / v2-server-manifest
+    runs-on: ubuntu-latest
+    env:
+      SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/devbox-v2-server:${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare server manifest artifact
+        run: |
+          cp v2/server/deploy/devbox-api.yaml v2/server/dist-v2-server-deploy.yaml
+          sed -i.bak -E "s#ghcr.io/[^[:space:]\"]+/devbox-v2-server:[^[:space:]\"]+#${SERVER_IMAGE}#" v2/server/dist-v2-server-deploy.yaml
+          rm v2/server/dist-v2-server-deploy.yaml.bak
+
+      - name: Upload server manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-server-manifest
+          path: v2/server/dist-v2-server-deploy.yaml
+          if-no-files-found: error
+
   github-release:
     name: GitHub Release
     runs-on: ubuntu-latest
@@ -156,6 +280,10 @@ jobs:
       - images
       - controller-manifests
       - v1-cri-shim-binaries
+      - v2-server-binaries
+      - v2-httpgate-chart
+      - v2-sshgate-chart
+      - v2-server-manifest
     steps:
       - name: Download manifest artifacts
         uses: actions/download-artifact@v5
@@ -170,6 +298,11 @@ jobs:
             artifacts/v1-controller-install/dist-v1-controller-install.yaml
             artifacts/v2-controller-install/dist-v2-controller-install.yaml
             artifacts/v1-cri-shim-binaries/*
+            artifacts/v2-server-binaries-amd64/devbox-api-amd64
+            artifacts/v2-server-binaries-arm64/devbox-api-arm64
+            artifacts/v2-httpgate-chart/devbox-v2-httpgate-chart-${{ github.ref_name }}.tgz
+            artifacts/v2-sshgate-chart/devbox-v2-sshgate-chart-${{ github.ref_name }}.tgz
+            artifacts/v2-server-manifest/dist-v2-server-deploy.yaml
           body: |
             Container images published for `${{ github.ref_name }}`:
 
@@ -177,7 +310,14 @@ jobs:
             - `ghcr.io/${{ github.repository_owner }}/devbox-v1-frontend:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-controller:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-frontend:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/devbox-v2-server:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/devbox-v2-httpgate:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/devbox-v2-sshgate:${{ github.ref_name }}`
 
             Binary artifacts attached to this release:
 
             - `v1-cri-shim` Linux binaries
+            - `v2-server` Linux binaries (`amd64`, `arm64`)
+            - `v2-httpgate` Helm chart package
+            - `v2-sshgate` Helm chart package
+            - `v2-server` deployment manifest

@@ -13,6 +13,7 @@ env:
   GO_VERSION: "1.25.3"
   NODE_VERSION: "20"
   PNPM_VERSION: "10.32.1"
+  RUST_TOOLCHAIN: "stable"
 
 jobs:
   controller:
@@ -64,6 +65,54 @@ jobs:
       - name: Build server
         run: make build
 
+  httpgate:
+    name: HTTP Gate / v2
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2/httpgate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Install httpgate build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake pkg-config libssl-dev
+
+      - name: Test httpgate
+        run: cargo test --locked
+
+      - name: Build httpgate
+        run: cargo build --locked --release
+
+  sshgate:
+    name: SSH Gate / v2
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2/sshgate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: v2/sshgate/go.sum
+
+      - name: Test sshgate
+        run: |
+          unset LOG_FORMAT LOG_LEVEL SSH_LISTEN_ADDR SSH_HOST_KEY_SEED SSH_BACKEND_PORT ENABLE_AGENT_FORWARD ENABLE_PROXY_JUMP
+          go test ./...
+
+      - name: Build sshgate
+        run: make build
+
   cri-shim:
     name: CRI Shim / v1
     runs-on: ubuntu-latest
@@ -101,45 +150,7 @@ jobs:
       run:
         working-directory: ${{ matrix.workdir }}
     env:
-      NEXT_PUBLIC_MOCK_USER: ""
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
-      WHITELIST_KUBERNETES_HOSTS: ""
-      SEALOS_DOMAIN: "example.com"
-      SSH_DOMAIN: "ssh.example.com"
-      INGRESS_DOMAIN: "apps.example.com"
-      REGISTRY_ADDR: "ghcr.io/example"
-      INGRESS_SECRET: "wildcard-cert"
-      DEVBOX_AFFINITY_ENABLE: "true"
-      SQUASH_ENABLE: "false"
-      STORAGE_LIMIT: "10Gi"
-      JWT_SECRET: "devbox-ci-secret"
-      REGION_UID: "ci-region"
-      METRICS_URL: "http://127.0.0.1:8429"
-      MONITOR_URL: "http://127.0.0.1:8428"
-      ACCOUNT_URL: "http://127.0.0.1:2333"
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/devbox?schema=public"
-      RETAG_SVC_URL: "http://127.0.0.1:8092"
-      PRIVACY_URL_ZH: "https://example.com/privacy/zh"
-      PRIVACY_URL_EN: "https://example.com/privacy/en"
-      DOCUMENT_URL_ZH: "https://example.com/docs/zh"
-      DOCUMENT_URL_EN: "https://example.com/docs/en"
-      CURRENCY_SYMBOL: "usd"
-      GPU_ENABLE: "false"
-      ENABLE_IMPORT_FEATURE: "false"
-      ENABLE_WEBIDE_FEATURE: "false"
-      ENABLE_ADVANCED_CONFIG: "false"
-      ENABLE_ADVANCED_ENV_AND_CONFIGMAP: "false"
-      ENABLE_ADVANCED_NFS: "false"
-      ENABLE_ADVANCED_SHARED_MEMORY: "false"
-      CPU_SLIDE_MARK_LIST: "1,2,4,8,16"
-      MEMORY_SLIDE_MARK_LIST: "2,4,8,16,32"
-      STORAGE_DEFAULT: "10"
-      DEVBOX_DOMAIN_CHALLENGE_SECRET: "devbox-ci-domain-secret"
-      NFS_STORAGE_CLASS_NAME: "nfs-csi"
-      NFS_MAX_SIZE: "20"
-      WEBIDE_PORT: "9999"
-      ROOT_RUNTIME_NAMESPACE: "devbox-system"
-      CUSTOM_SCRIPTS: "[]"
     steps:
       - name: Checkout
         uses: actions/checkout@v5

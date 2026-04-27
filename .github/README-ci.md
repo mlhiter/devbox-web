@@ -5,15 +5,18 @@ This repository publishes CI artifacts and container images from `github.com/sea
 ## Workflows
 
 - `CI`
-  Runs controller tests and frontend verification for `v1` and `v2`.
+  Runs controller tests, server checks, frontend verification, and gateway/service builds for `v1` and `v2`.
 - `Images`
   Builds and pushes the following images to GHCR:
   - `ghcr.io/sealos-apps/devbox-v1-controller`
   - `ghcr.io/sealos-apps/devbox-v1-frontend`
   - `ghcr.io/sealos-apps/devbox-v2-controller`
   - `ghcr.io/sealos-apps/devbox-v2-frontend`
+  - `ghcr.io/sealos-apps/devbox-v2-server`
+  - `ghcr.io/sealos-apps/devbox-v2-httpgate`
+  - `ghcr.io/sealos-apps/devbox-v2-sshgate`
 - `Release`
-  Triggers on `v*` tags, creates a GitHub Release, and uploads generated controller manifests.
+  Triggers on `v*` tags, creates a GitHub Release, and uploads generated controller manifests plus `v1-cri-shim`, `v2-server`, `v2-httpgate`, and `v2-sshgate` release artifacts.
 
 ## Trigger Rules
 

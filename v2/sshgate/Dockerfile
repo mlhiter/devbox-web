@@ -22,13 +22,14 @@ COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags "-s -w" -o /devbox-api ./cmd/devbox-api
+    go build -trimpath -ldflags "-s -w" -o /sshgate .
 
 FROM gcr.io/distroless/static:nonroot
 
-COPY --from=builder /devbox-api /usr/local/bin/devbox-api
+COPY --from=builder /sshgate /sshgate
 
 USER 65532:65532
 
-EXPOSE 8090
-ENTRYPOINT ["/usr/local/bin/devbox-api"]
+EXPOSE 2222
+
+ENTRYPOINT ["/sshgate"]
