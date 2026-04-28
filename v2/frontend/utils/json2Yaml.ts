@@ -6,6 +6,9 @@ import { produce } from 'immer';
 import { nanoid, parseTemplateConfig, str2Num } from './tools';
 import { getUserNamespace } from './user';
 
+const getConfigMapFileName = (path: string, fallbackId: string) =>
+  path.split('/').filter(Boolean).pop() || `config-${fallbackId}`;
+
 export const json2Devbox = (
   data: Omit<json2DevboxData, 'templateRepositoryUid'>,
   devboxAffinityEnable: string = 'true',
@@ -74,6 +77,7 @@ export const json2Devbox = (
             const shortId = cm.id || nanoid();
             const volumeName = `${data.name}-volume-cm-${shortId}`;
             const configMapName = `${data.name}-cm-${shortId}`;
+            const filename = getConfigMapFileName(cm.path, shortId);
 
             newVolumes.push({
               name: volumeName,
@@ -84,7 +88,8 @@ export const json2Devbox = (
 
             newVolumeMounts.push({
               name: volumeName,
-              mountPath: cm.path
+              mountPath: cm.path,
+              subPath: filename
             });
           });
         }
@@ -358,7 +363,7 @@ export const json2ConfigMap = (data: Pick<DevboxEditTypeV2, 'name' | 'configMaps
     .map((cm) => {
       const shortId = cm.id || nanoid();
       const configMapName = `${data.name}-cm-${shortId}`;
-      const filename = cm.path.split('/').pop() || `config-${shortId}`;
+      const filename = getConfigMapFileName(cm.path, shortId);
 
       const configMap = {
         apiVersion: 'v1',

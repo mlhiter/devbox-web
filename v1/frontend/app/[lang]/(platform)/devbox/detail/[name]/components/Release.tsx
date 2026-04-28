@@ -163,12 +163,17 @@ const Release = () => {
           [devboxIdKey]: devbox.id
         },
         configMapList:
-          configMaps?.map((cm) => ({
-            mountPath: cm.path,
-            value: cm.content,
-            key: cm.path.split('/').pop() || 'config',
-            volumeName: `${name}-volume-cm-${cm.id}`
-          })) || [],
+          configMaps?.map((cm) => {
+            const key = cm.path.split('/').filter(Boolean).pop() || 'config';
+
+            return {
+              mountPath: cm.path,
+              value: cm.content,
+              key,
+              volumeName: `${name}-volume-cm-${cm.id}`,
+              subPath: key
+            };
+          }) || [],
         storeList:
           volumes?.map((vol) => ({
             name: `${name}-pvc-${vol.id}`,
