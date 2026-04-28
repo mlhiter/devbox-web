@@ -8,6 +8,8 @@ import { getUserNamespace } from './user';
 import { RuntimeNamespaceMap } from '@/types/static';
 
 const GPU_CORES_DEFAULT = 100;
+const getConfigMapFileName = (path: string, fallbackId: string) =>
+  path.split('/').filter(Boolean).pop() || `config-${fallbackId}`;
 
 export const json2Devbox = (
   data: DevboxEditType,
@@ -173,6 +175,7 @@ export const json2DevboxV2 = (
             const shortId = cm.id || nanoid();
             const volumeName = `${data.name}-volume-cm-${shortId}`;
             const configMapName = `${data.name}-cm-${shortId}`;
+            const filename = getConfigMapFileName(cm.path, shortId);
 
             newVolumes.push({
               name: volumeName,
@@ -183,7 +186,8 @@ export const json2DevboxV2 = (
 
             newVolumeMounts.push({
               name: volumeName,
-              mountPath: cm.path
+              mountPath: cm.path,
+              subPath: filename
             });
           });
         }
@@ -541,7 +545,7 @@ export const json2ConfigMap = (
     .map((cm) => {
       const shortId = cm.id || nanoid();
       const configMapName = `${data.name}-cm-${shortId}`;
-      const filename = cm.path.split('/').pop() || `config-${shortId}`;
+      const filename = getConfigMapFileName(cm.path, shortId);
 
       const configMap = {
         apiVersion: 'v1',

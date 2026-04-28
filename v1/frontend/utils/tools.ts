@@ -490,6 +490,7 @@ export const parseTemplateConfig = (config: string) => {
     volumeMounts?: {
       name: string;
       mountPath: string;
+      subPath?: string;
     }[];
   };
 };
