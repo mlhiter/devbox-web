@@ -38,12 +38,12 @@ run: ## Run server from source
 	cd $(SERVER_DIR) && GOCACHE=$(GOCACHE) go run ./cmd/devbox-api --config $(CONFIG)
 
 .PHONY: docker-build
-docker-build: build ## Build docker image from local binary
+docker-build: ## Build docker image
 	docker build \
 		-f $(SERVER_DIR)/Dockerfile \
 		-t $(IMG) \
 		--build-arg TARGETARCH=$(TARGETARCH) \
-		$(SERVER_DIR)
+		$(SERVER_DIR)/..
 
 .PHONY: docker-push
 docker-push: ## Push docker image

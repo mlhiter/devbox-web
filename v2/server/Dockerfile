@@ -13,13 +13,18 @@ ENV CGO_ENABLED=0 \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH
 
-COPY go.mod go.sum ./
+COPY server/go.mod server/go.sum ./server/
+COPY controller/go.mod controller/go.sum ./controller/
 
+WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-COPY . .
+WORKDIR /src
+COPY server ./server
+COPY controller ./controller
 
+WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags "-s -w" -o /devbox-api ./cmd/devbox-api
