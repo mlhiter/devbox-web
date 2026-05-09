@@ -35,6 +35,9 @@ data:
       domain: "devbox-gateway.hzh.sealos.run"
       pathPrefix: "/codex"
       port: 1317
+      codeServer:
+        pathPrefix: "/code-server"
+        port: 1318
     devbox:
       createDefaults:
         image: "ghcr.io/labring-actions/devbox-base-expt/sandbox-v1:latest-en-us-amd64"

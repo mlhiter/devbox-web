@@ -81,6 +81,33 @@
       }
     },
     "schemas": {
+      "CodeServerGatewayInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "example": "\u003cDEVBOX_JWT_SECRET\u003e",
+            "type": "string"
+          },
+          "port": {
+            "example": 1318,
+            "type": "integer"
+          },
+          "uniqueID": {
+            "example": "demo-unique-id",
+            "type": "string"
+          },
+          "url": {
+            "example": "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "password",
+          "port"
+        ],
+        "type": "object"
+      },
       "CreateDevboxData": {
         "additionalProperties": false,
         "properties": {
@@ -386,6 +413,16 @@
       "GetDevboxInfoData": {
         "additionalProperties": false,
         "properties": {
+          "codeServerGateway": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CodeServerGatewayInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "creationTimestamp": {
             "example": "2026-02-26T07:20:30Z",
             "format": "date-time",
@@ -669,7 +706,7 @@
     }
   },
   "info": {
-    "description": "OpenAPI contract for the standalone Devbox REST API served by `v2/server`.\n\n## Authentication\n\nAll business endpoints require `Authorization: Bearer \u003cJWT\u003e`.\nThe JWT must use `HS256` and include a `namespace` claim. Namespace is derived from the token only.\n\n## Response Model\n\nSuccessful JSON responses use the envelope `{ code, message, data }`.\nError responses use `{ code, message }`.\n`GET /api/v1/devbox/{name}/files/download` returns a binary stream on success and JSON on error.\n\n## Gateway Proxy\n\nThe runtime gateway proxy path is config-driven and intentionally not modeled as an OpenAPI path here.\nUse `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access.",
+    "description": "OpenAPI contract for the standalone Devbox REST API served by `v2/server`.\n\n## Authentication\n\nAll business endpoints require `Authorization: Bearer \u003cJWT\u003e`.\nThe JWT must use `HS256` and include a `namespace` claim. Namespace is derived from the token only.\n\n## Response Model\n\nSuccessful JSON responses use the envelope `{ code, message, data }`.\nError responses use `{ code, message }`.\n`GET /api/v1/devbox/{name}/files/download` returns a binary stream on success and JSON on error.\n\n## Gateway Proxy\n\nThe runtime gateway proxy path is config-driven and intentionally not modeled as an OpenAPI path here.\nUse `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access, or `data.codeServerGateway.url` plus `data.codeServerGateway.password` for code-server access.",
     "title": "Devbox REST API (v2/server)",
     "version": "1.0.0"
   },
@@ -1112,7 +1149,7 @@
         ]
       },
       "get": {
-        "description": "Returns Devbox state, SSH connection info, and gateway access info when the gateway route is configured.",
+        "description": "Returns Devbox state, SSH connection info, and gateway access info when gateway routes are configured.",
         "operationId": "getDevboxInfo",
         "parameters": [
           {
@@ -1129,6 +1166,12 @@
                     "value": {
                       "code": 200,
                       "data": {
+                        "codeServerGateway": {
+                          "password": "\u003cDEVBOX_JWT_SECRET\u003e",
+                          "port": 1318,
+                          "uniqueID": "demo-unique-id",
+                          "url": "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id"
+                        },
                         "creationTimestamp": "2026-02-26T07:20:30Z",
                         "deletionTimestamp": null,
                         "gateway": {

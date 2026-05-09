@@ -16,16 +16,18 @@ import (
 )
 
 const (
-	defaultServerAddr        = ":8090"
-	defaultGatewayServerAddr = ":8091"
-	defaultLifecycleResync   = 30 * time.Minute
-	defaultCreateCPU         = "2000m"
-	defaultCreateMemory      = "4096Mi"
-	defaultCreateStorageSize = "10Gi"
-	defaultCreateImage       = "ghcr.io/labring-actions/devbox-runtime-expt/python-3.12:v2.5.0-zh-cn"
-	defaultGatewayPathPrefix = "/codex"
-	defaultGatewayPort       = 1317
-	defaultLogLevel          = slog.LevelInfo
+	defaultServerAddr                  = ":8090"
+	defaultGatewayServerAddr           = ":8091"
+	defaultLifecycleResync             = 30 * time.Minute
+	defaultCreateCPU                   = "2000m"
+	defaultCreateMemory                = "4096Mi"
+	defaultCreateStorageSize           = "10Gi"
+	defaultCreateImage                 = "ghcr.io/labring-actions/devbox-runtime-expt/python-3.12:v2.5.0-zh-cn"
+	defaultGatewayPathPrefix           = "/codex"
+	defaultGatewayPort                 = 1317
+	defaultCodeServerGatewayPathPrefix = "/code-server"
+	defaultCodeServerGatewayPort       = 1318
+	defaultLogLevel                    = slog.LevelInfo
 )
 
 type ServerConfig struct {
@@ -48,6 +50,12 @@ type SSHConnectionConfig struct {
 
 type GatewayConfig struct {
 	Domain     string
+	PathPrefix string
+	Port       int
+	CodeServer GatewayTargetConfig
+}
+
+type GatewayTargetConfig struct {
 	PathPrefix string
 	Port       int
 }
@@ -87,7 +95,13 @@ type sshSection struct {
 }
 
 type gatewaySection struct {
-	Domain     string `yaml:"domain"`
+	Domain     string               `yaml:"domain"`
+	PathPrefix string               `yaml:"pathPrefix"`
+	Port       int                  `yaml:"port"`
+	CodeServer gatewayTargetSection `yaml:"codeServer"`
+}
+
+type gatewayTargetSection struct {
 	PathPrefix string `yaml:"pathPrefix"`
 	Port       int    `yaml:"port"`
 }
@@ -196,7 +210,7 @@ func loadServerConfig(configPath string) (ServerConfig, error) {
 	if err != nil {
 		return ServerConfig{}, err
 	}
-	gatewayPathPrefix, err := normalizeGatewayPathPrefix(fc.Gateway.PathPrefix)
+	gatewayPathPrefix, err := normalizeGatewayPathPrefixField(fc.Gateway.PathPrefix, defaultGatewayPathPrefix, "gateway.pathPrefix")
 	if err != nil {
 		return ServerConfig{}, err
 	}
@@ -206,6 +220,24 @@ func loadServerConfig(configPath string) (ServerConfig, error) {
 	}
 	if gatewayPort < 1 || gatewayPort > 65535 {
 		return ServerConfig{}, fmt.Errorf("gateway.port must be in [1, 65535]")
+	}
+	codeServerGatewayPathPrefix, err := normalizeGatewayPathPrefixField(
+		fc.Gateway.CodeServer.PathPrefix,
+		defaultCodeServerGatewayPathPrefix,
+		"gateway.codeServer.pathPrefix",
+	)
+	if err != nil {
+		return ServerConfig{}, err
+	}
+	if codeServerGatewayPathPrefix == gatewayPathPrefix {
+		return ServerConfig{}, fmt.Errorf("gateway.codeServer.pathPrefix must differ from gateway.pathPrefix")
+	}
+	codeServerGatewayPort := fc.Gateway.CodeServer.Port
+	if codeServerGatewayPort == 0 {
+		codeServerGatewayPort = defaultCodeServerGatewayPort
+	}
+	if codeServerGatewayPort < 1 || codeServerGatewayPort > 65535 {
+		return ServerConfig{}, fmt.Errorf("gateway.codeServer.port must be in [1, 65535]")
 	}
 
 	cfg := ServerConfig{
@@ -224,6 +256,10 @@ func loadServerConfig(configPath string) (ServerConfig, error) {
 			Domain:     gatewayDomain,
 			PathPrefix: gatewayPathPrefix,
 			Port:       gatewayPort,
+			CodeServer: GatewayTargetConfig{
+				PathPrefix: codeServerGatewayPathPrefix,
+				Port:       codeServerGatewayPort,
+			},
 		},
 		CreateResource: CreateDevboxResourceConfig{
 			CPU:          cpu,
@@ -303,12 +339,16 @@ func normalizeGatewayDomain(raw string) (string, error) {
 }
 
 func normalizeGatewayPathPrefix(raw string) (string, error) {
+	return normalizeGatewayPathPrefixField(raw, defaultGatewayPathPrefix, "gateway.pathPrefix")
+}
+
+func normalizeGatewayPathPrefixField(raw string, defaultValue string, field string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		value = defaultGatewayPathPrefix
+		value = defaultValue
 	}
 	if !strings.HasPrefix(value, "/") {
-		return "", fmt.Errorf("gateway.pathPrefix must start with '/'")
+		return "", fmt.Errorf("%s must start with '/'", field)
 	}
 	value = path.Clean(value)
 	if value != "/" {

@@ -20,9 +20,17 @@ type gatewayIndexEntry struct {
 }
 
 func gatewayPathPrefix(cfg GatewayConfig) string {
-	pathPrefix := strings.TrimSpace(cfg.PathPrefix)
+	return gatewayProxyPathPrefix(cfg.PathPrefix, defaultGatewayPathPrefix)
+}
+
+func codeServerGatewayPathPrefix(cfg GatewayConfig) string {
+	return gatewayProxyPathPrefix(cfg.CodeServer.PathPrefix, defaultCodeServerGatewayPathPrefix)
+}
+
+func gatewayProxyPathPrefix(raw string, defaultValue string) string {
+	pathPrefix := strings.TrimSpace(raw)
 	if pathPrefix == "" {
-		pathPrefix = defaultGatewayPathPrefix
+		pathPrefix = defaultValue
 	}
 	if !strings.HasPrefix(pathPrefix, "/") {
 		pathPrefix = "/" + pathPrefix
@@ -41,14 +49,28 @@ func gatewayPort(cfg GatewayConfig) int {
 	return cfg.Port
 }
 
+func codeServerGatewayPort(cfg GatewayConfig) int {
+	if cfg.CodeServer.Port <= 0 {
+		return defaultCodeServerGatewayPort
+	}
+	return cfg.CodeServer.Port
+}
+
 func buildGatewayURLs(cfg GatewayConfig, uniqueID string) (string, bool) {
+	return buildGatewayURL(cfg, gatewayPathPrefix(cfg), uniqueID)
+}
+
+func buildCodeServerGatewayURLs(cfg GatewayConfig, uniqueID string) (string, bool) {
+	return buildGatewayURL(cfg, codeServerGatewayPathPrefix(cfg), uniqueID)
+}
+
+func buildGatewayURL(cfg GatewayConfig, pathPrefix string, uniqueID string) (string, bool) {
 	domain := strings.TrimRight(strings.TrimSpace(cfg.Domain), "/")
 	uniqueID = strings.TrimSpace(uniqueID)
 	if domain == "" || uniqueID == "" {
 		return "", false
 	}
 
-	pathPrefix := gatewayPathPrefix(cfg)
 	basePath := path.Join("/", pathPrefix, uniqueID)
 	return "https://" + domain + basePath, true
 }

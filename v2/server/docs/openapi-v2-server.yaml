@@ -69,6 +69,26 @@ components:
         example: session-123
         type: string
   schemas:
+    CodeServerGatewayInfo:
+      additionalProperties: false
+      properties:
+        password:
+          example: <DEVBOX_JWT_SECRET>
+          type: string
+        port:
+          example: 1318
+          type: integer
+        uniqueID:
+          example: demo-unique-id
+          type: string
+        url:
+          example: https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id
+          type: string
+      required:
+      - url
+      - password
+      - port
+      type: object
     CreateDevboxData:
       additionalProperties: false
       properties:
@@ -299,6 +319,10 @@ components:
     GetDevboxInfoData:
       additionalProperties: false
       properties:
+        codeServerGateway:
+          oneOf:
+          - $ref: '#/components/schemas/CodeServerGatewayInfo'
+          - type: "null"
         creationTimestamp:
           example: "2026-02-26T07:20:30Z"
           format: date-time
@@ -523,7 +547,7 @@ info:
     ## Gateway Proxy
 
     The runtime gateway proxy path is config-driven and intentionally not modeled as an OpenAPI path here.
-    Use `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access.
+    Use `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access, or `data.codeServerGateway.url` plus `data.codeServerGateway.password` for code-server access.
   title: Devbox REST API (v2/server)
   version: 1.0.0
 openapi: 3.1.0
@@ -822,7 +846,7 @@ paths:
       - Devbox
     get:
       description: Returns Devbox state, SSH connection info, and gateway access info
-        when the gateway route is configured.
+        when gateway routes are configured.
       operationId: getDevboxInfo
       parameters:
       - $ref: '#/components/parameters/DevboxName'
@@ -836,6 +860,11 @@ paths:
                   value:
                     code: 200
                     data:
+                      codeServerGateway:
+                        password: <DEVBOX_JWT_SECRET>
+                        port: 1318
+                        uniqueID: demo-unique-id
+                        url: https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id
                       creationTimestamp: "2026-02-26T07:20:30Z"
                       deletionTimestamp: null
                       gateway:

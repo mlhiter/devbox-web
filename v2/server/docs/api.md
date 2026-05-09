@@ -257,6 +257,12 @@ curl -sS -X GET "${HOST}/api/v1/devbox/${DEVBOX_NAME}" \
       "token": "<signed-gateway-jwt>",
       "port": 1317,
       "uniqueID": "demo-unique-id"
+    },
+    "codeServerGateway": {
+      "url": "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id",
+      "password": "<DEVBOX_JWT_SECRET>",
+      "port": 1318,
+      "uniqueID": "demo-unique-id"
     }
   }
 }
@@ -271,23 +277,27 @@ curl -sS -X GET "${HOST}/api/v1/devbox/${DEVBOX_NAME}" \
 - `gateway.token` 返回的是服务端用 DevBox Secret 中的 `SEALOS_DEVBOX_JWT_SECRET` 签发的 HS256 JWT，可直接作为 `Authorization: Bearer <token>` 访问 app gateway
 - 该 JWT payload 会包含 `namespace` 和 `devboxName`，并带有过期时间
 - `gateway.url` 由服务端配置项 `gateway.domain + gateway.pathPrefix + status.network.uniqueID` 生成，例如 `https://devbox-gateway.staging-usw-1.sealos.io/codex/demo-unique-id`
+- `codeServerGateway.url` 由同一个 `gateway.domain` 加上 `gateway.codeServer.pathPrefix + status.network.uniqueID` 生成，例如 `https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id`
+- `codeServerGateway.password` 返回 DevBox Secret 中的 `SEALOS_DEVBOX_JWT_SECRET` 原值，用作 code-server 登录密码
 - 服务端内部会维护一份基于 `status.network.uniqueID` 的内存索引，供后续快速定位对应 Devbox，无需 Redis
 - 当外部 ingress 把 `/codex/*` 转发到 `v2/server` 时，服务端会定位当前运行中的 DevBox pod，并反代到 `http://<podIP>:1317`
+- 当外部 ingress 把 `/code-server/*` 转发到同一个 gateway listener 时，服务端会定位当前运行中的 DevBox pod，并反代到 `http://<podIP>:1318`
 
 ### 5.3.1 两层 Ingress 建议
 
 推荐拆成两层：
 
 - 第一层：`v2/server` API ingress，转发到 API listener（默认 `:8090`），负责 JWT 鉴权和 DevBox 管理接口
-- 第二层：devbox gateway ingress，将 `/codex/*` 转发到 gateway listener（默认 `:8091`），由 `v2/server` 再反代到对应 DevBox 的 `1317`
+- 第二层：devbox gateway ingress，将 `/codex/*` 和 `/code-server/*` 转发到 gateway listener（默认 `:8091`），由 `v2/server` 再反代到对应 DevBox 的 `1317` 或 `1318`
 
 路径模式建议：
 
 - app gateway 域名：`https://devbox-gateway.staging-usw-1.sealos.io`
-- 固定路径前缀：`/codex`
-- 最终访问地址：`/codex/{status.network.uniqueID}`
+- codex gateway 固定路径前缀：`/codex`
+- code-server gateway 固定路径前缀：`/code-server`
+- 最终访问地址：`/codex/{status.network.uniqueID}` 或 `/code-server/{status.network.uniqueID}`
 
-`v2/server` 会根据 `{status.network.uniqueID}` 查内存索引，找到对应 DevBox，然后定位当前运行中的 pod 并反代到 `http://<podIP>:1317`。这样可以避免 gateway 路径对集群 DNS 的强依赖。当前仍只代理固定 `1317` 端口。当前进程内使用两个独立的 `http.Server`，分别承接 API 和 gateway 流量。
+`v2/server` 会根据 `{status.network.uniqueID}` 查内存索引，找到对应 DevBox，然后定位当前运行中的 pod 并反代到对应端口：codex gateway 使用 `http://<podIP>:1317`，code-server gateway 使用 `http://<podIP>:1318`。这样可以避免 gateway 路径对集群 DNS 的强依赖。当前进程内使用两个独立的 `http.Server`，分别承接 API 和 gateway 流量。
 
 ### 5.4 刷新自动暂停时间
 

@@ -120,6 +120,76 @@ func TestHandleGatewayProxyForwardsToRunningPodWithoutDNSLookup(t *testing.T) {
 	}
 }
 
+func TestHandleCodeServerGatewayProxyForwardsToPort1318(t *testing.T) {
+	type upstreamRequest struct {
+		Path            string
+		ForwardedPrefix string
+		Host            string
+	}
+
+	requestCh := make(chan upstreamRequest, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCh <- upstreamRequest{
+			Path:            r.URL.Path,
+			ForwardedPrefix: r.Header.Get("X-Forwarded-Prefix"),
+			Host:            r.Host,
+		}
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer upstream.Close()
+
+	devbox := &devboxv1alpha2.Devbox{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo-devbox",
+			Namespace: "ns-test",
+		},
+		Status: devboxv1alpha2.DevboxStatus{
+			Network: devboxv1alpha2.NetworkStatus{
+				UniqueID: "demo-unique-id",
+			},
+		},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo-devbox",
+			Namespace: "ns-test",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			PodIP: "10.0.0.8",
+		},
+	}
+	srv := newTestAPIServer(t, devbox, pod)
+	srv.cfg.Gateway = GatewayConfig{
+		Domain:     "devbox-gateway.staging-usw-1.sealos.io",
+		PathPrefix: "/codex",
+		Port:       1317,
+	}
+	srv.syncGatewayIndex(devbox)
+	srv.gatewayProxyTransport = newTestGatewayProxyTransport(t, upstream.URL)
+
+	req := httptest.NewRequest(http.MethodGet, "/code-server/demo-unique-id/?folder=/home/devbox/workspace", nil)
+	req.Host = "devbox-gateway.staging-usw-1.sealos.io"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp := httptest.NewRecorder()
+
+	srv.routes().ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d, body=%s", http.StatusOK, resp.Code, resp.Body.String())
+	}
+	upstreamReq := <-requestCh
+	if upstreamReq.Path != "/" {
+		t.Fatalf("unexpected upstream path: %s", upstreamReq.Path)
+	}
+	if upstreamReq.ForwardedPrefix != "/code-server/demo-unique-id" {
+		t.Fatalf("unexpected forwarded prefix: %s", upstreamReq.ForwardedPrefix)
+	}
+	if upstreamReq.Host != "demo-unique-id.ns-test.svc.cluster.local:1318" {
+		t.Fatalf("unexpected upstream host: %s", upstreamReq.Host)
+	}
+}
+
 func TestHandleGatewayProxyRewritesLocationAndCookiePath(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Set-Cookie", "session=abc; Path=/; HttpOnly")

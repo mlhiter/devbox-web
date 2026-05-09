@@ -175,10 +175,26 @@ func (s *apiServer) registerGatewayRoutes(mux *http.ServeMux) {
 	if mux == nil {
 		return
 	}
-	proxyPathPrefix := gatewayPathPrefix(s.cfg.Gateway)
-	mux.Handle(proxyPathPrefix, http.HandlerFunc(s.handleGatewayProxy))
+	s.registerGatewayProxyRoute(mux, gatewayProxyTarget{
+		Name:       "gateway",
+		PathPrefix: gatewayPathPrefix(s.cfg.Gateway),
+		Port:       gatewayPort(s.cfg.Gateway),
+	})
+	s.registerGatewayProxyRoute(mux, gatewayProxyTarget{
+		Name:       "code_server_gateway",
+		PathPrefix: codeServerGatewayPathPrefix(s.cfg.Gateway),
+		Port:       codeServerGatewayPort(s.cfg.Gateway),
+	})
+}
+
+func (s *apiServer) registerGatewayProxyRoute(mux *http.ServeMux, target gatewayProxyTarget) {
+	proxyPathPrefix := target.PathPrefix
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.handleGatewayProxyWithTarget(w, r, target)
+	})
+	mux.Handle(proxyPathPrefix, handler)
 	if proxyPathPrefix != "/" {
-		mux.Handle(proxyPathPrefix+"/", http.HandlerFunc(s.handleGatewayProxy))
+		mux.Handle(proxyPathPrefix+"/", handler)
 	}
 }
 
@@ -666,13 +682,14 @@ func (s *apiServer) handleGetDevboxInfo(w http.ResponseWriter, r *http.Request) 
 		"ssh": sshInfo,
 	}
 	if !credentialsPending {
+		now := time.Now().UTC()
 		gatewayInfo, hasGatewayRoute, err := buildGatewayInfo(
 			s.cfg.Gateway,
 			namespace,
 			name,
 			devbox.Status.Network.UniqueID,
 			devboxJWTSecret,
-			time.Now().UTC(),
+			now,
 		)
 		if err != nil {
 			s.logError("issue devbox gateway token failed", err, "namespace", namespace, "name", name)
@@ -681,6 +698,19 @@ func (s *apiServer) handleGetDevboxInfo(w http.ResponseWriter, r *http.Request) 
 		}
 		if hasGatewayRoute {
 			data["gateway"] = gatewayInfo
+		}
+		codeServerGatewayInfo, hasCodeServerGatewayRoute, err := buildCodeServerGatewayInfo(
+			s.cfg.Gateway,
+			devbox.Status.Network.UniqueID,
+			devboxJWTSecret,
+		)
+		if err != nil {
+			s.logError("build devbox code-server gateway info failed", err, "namespace", namespace, "name", name)
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("build devbox code-server gateway info failed: %v", err))
+			return
+		}
+		if hasCodeServerGatewayRoute {
+			data["codeServerGateway"] = codeServerGatewayInfo
 		}
 	}
 
@@ -1848,7 +1878,50 @@ func buildGatewayInfo(
 	devboxJWTSecret string,
 	now time.Time,
 ) (map[string]interface{}, bool, error) {
-	route, hasRoute := buildGatewayURLs(cfg, uniqueID)
+	return buildGatewayInfoForTarget(
+		cfg,
+		namespace,
+		devboxName,
+		uniqueID,
+		devboxJWTSecret,
+		now,
+		gatewayPathPrefix(cfg),
+		gatewayPort(cfg),
+	)
+}
+
+func buildCodeServerGatewayInfo(
+	cfg GatewayConfig,
+	uniqueID string,
+	devboxJWTSecret string,
+) (map[string]interface{}, bool, error) {
+	route, hasRoute := buildGatewayURL(cfg, codeServerGatewayPathPrefix(cfg), uniqueID)
+	if !hasRoute {
+		return nil, false, nil
+	}
+
+	info := map[string]interface{}{
+		"url":      route,
+		"password": devboxJWTSecret,
+		"port":     codeServerGatewayPort(cfg),
+	}
+	if uniqueID != "" {
+		info["uniqueID"] = uniqueID
+	}
+	return info, true, nil
+}
+
+func buildGatewayInfoForTarget(
+	cfg GatewayConfig,
+	namespace string,
+	devboxName string,
+	uniqueID string,
+	devboxJWTSecret string,
+	now time.Time,
+	pathPrefix string,
+	port int,
+) (map[string]interface{}, bool, error) {
+	route, hasRoute := buildGatewayURL(cfg, pathPrefix, uniqueID)
 	if !hasRoute {
 		return nil, false, nil
 	}
@@ -1861,7 +1934,7 @@ func buildGatewayInfo(
 	info := map[string]interface{}{
 		"url":   route,
 		"token": token,
-		"port":  gatewayPort(cfg),
+		"port":  port,
 	}
 	if uniqueID != "" {
 		info["uniqueID"] = uniqueID

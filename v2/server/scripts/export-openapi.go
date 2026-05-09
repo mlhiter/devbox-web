@@ -33,7 +33,7 @@ func main() {
 		fail("resolve working directory", err)
 	}
 
-	docsDir := filepath.Clean(filepath.Join(wd, "..", "..", "docs"))
+	docsDir := filepath.Clean(filepath.Join(wd, "docs"))
 	if err := os.MkdirAll(docsDir, 0o755); err != nil {
 		fail("create docs directory", err)
 	}
@@ -73,7 +73,7 @@ func buildSpec() map[string]any {
 				"`GET /api/v1/devbox/{name}/files/download` returns a binary stream on success and JSON on error.\n\n" +
 				"## Gateway Proxy\n\n" +
 				"The runtime gateway proxy path is config-driven and intentionally not modeled as an OpenAPI path here.\n" +
-				"Use `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access.",
+				"Use `GET /api/v1/devbox/{name}` and read `data.gateway.url` plus `data.gateway.token` for app access, or `data.codeServerGateway.url` plus `data.codeServerGateway.password` for code-server access.",
 		},
 		"servers": []any{
 			map[string]any{
@@ -478,6 +478,29 @@ func buildSpec() map[string]any {
 					},
 					"required": []any{"url", "token", "port"},
 				},
+				"CodeServerGatewayInfo": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"url": map[string]any{
+							"type":    "string",
+							"example": "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id",
+						},
+						"password": map[string]any{
+							"type":    "string",
+							"example": "<DEVBOX_JWT_SECRET>",
+						},
+						"port": map[string]any{
+							"type":    "integer",
+							"example": 1318,
+						},
+						"uniqueID": map[string]any{
+							"type":    "string",
+							"example": "demo-unique-id",
+						},
+					},
+					"required": []any{"url", "password", "port"},
+				},
 				"GetDevboxInfoData": map[string]any{
 					"type":                 "object",
 					"additionalProperties": false,
@@ -501,6 +524,12 @@ func buildSpec() map[string]any {
 						"gateway": map[string]any{
 							"oneOf": []any{
 								schemaRef("GatewayInfo"),
+								map[string]any{"type": "null"},
+							},
+						},
+						"codeServerGateway": map[string]any{
+							"oneOf": []any{
+								schemaRef("CodeServerGatewayInfo"),
 								map[string]any{"type": "null"},
 							},
 						},
@@ -848,7 +877,7 @@ func buildSpec() map[string]any {
 					"tags":        []any{"Devbox"},
 					"operationId": "getDevboxInfo",
 					"summary":     "Get Devbox info",
-					"description": "Returns Devbox state, SSH connection info, and gateway access info when the gateway route is configured.",
+					"description": "Returns Devbox state, SSH connection info, and gateway access info when gateway routes are configured.",
 					"parameters": []any{
 						paramRef("DevboxName"),
 					},
@@ -883,6 +912,12 @@ func buildSpec() map[string]any {
 											"url":      "https://devbox-gateway.staging-usw-1.sealos.io/codex/demo-unique-id",
 											"token":    "<signed-gateway-jwt>",
 											"port":     1317,
+											"uniqueID": "demo-unique-id",
+										},
+										"codeServerGateway": map[string]any{
+											"url":      "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id",
+											"password": "<DEVBOX_JWT_SECRET>",
+											"port":     1318,
 											"uniqueID": "demo-unique-id",
 										},
 									},

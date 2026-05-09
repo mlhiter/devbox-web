@@ -27,6 +27,9 @@ gateway:
   domain: "devbox-gateway.staging-usw-1.sealos.io"
   pathPrefix: "/codex"
   port: 1317
+  codeServer:
+    pathPrefix: "/code-server"
+    port: 1318
 devbox:
   createDefaults:
     image: "registry.example.com/devbox/runtime:latest"
@@ -73,6 +76,12 @@ devbox:
 	}
 	if cfg.Gateway.Port != 1317 {
 		t.Fatalf("unexpected gateway port: %d", cfg.Gateway.Port)
+	}
+	if cfg.Gateway.CodeServer.PathPrefix != "/code-server" {
+		t.Fatalf("unexpected code-server gateway pathPrefix: %s", cfg.Gateway.CodeServer.PathPrefix)
+	}
+	if cfg.Gateway.CodeServer.Port != 1318 {
+		t.Fatalf("unexpected code-server gateway port: %d", cfg.Gateway.CodeServer.Port)
 	}
 	if cfg.CreateResource.CPU != "2500m" {
 		t.Fatalf("unexpected cpu: %s", cfg.CreateResource.CPU)
@@ -140,6 +149,12 @@ devbox:
 	}
 	if cfg.Gateway.PathPrefix != defaultGatewayPathPrefix {
 		t.Fatalf("unexpected default gateway pathPrefix: %s", cfg.Gateway.PathPrefix)
+	}
+	if cfg.Gateway.CodeServer.PathPrefix != defaultCodeServerGatewayPathPrefix {
+		t.Fatalf("unexpected default code-server gateway pathPrefix: %s", cfg.Gateway.CodeServer.PathPrefix)
+	}
+	if cfg.Gateway.CodeServer.Port != defaultCodeServerGatewayPort {
+		t.Fatalf("unexpected default code-server gateway port: %d", cfg.Gateway.CodeServer.Port)
 	}
 	if cfg.CreateResource.Image != defaultCreateImage {
 		t.Fatalf("unexpected default image: %s", cfg.CreateResource.Image)
@@ -233,6 +248,30 @@ gateway:
 
 	if _, err := loadServerConfig(configPath); err == nil {
 		t.Fatalf("expected error for invalid gateway.pathPrefix")
+	}
+}
+
+func TestLoadServerConfigRejectsDuplicateGatewayPathPrefixes(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+auth:
+  jwtSigningKey: "jwt-secret"
+ssh:
+  host: "staging-usw-1.sealos.io"
+  port: 2233
+gateway:
+  pathPrefix: "/codex"
+  codeServer:
+    pathPrefix: "/codex"
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
+		t.Fatalf("write config file failed: %v", err)
+	}
+
+	if _, err := loadServerConfig(configPath); err == nil {
+		t.Fatalf("expected error for duplicate gateway path prefixes")
 	}
 }
 

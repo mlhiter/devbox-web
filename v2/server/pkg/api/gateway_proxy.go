@@ -21,6 +21,12 @@ type gatewayProxyRoute struct {
 	UpstreamPath string
 }
 
+type gatewayProxyTarget struct {
+	Name       string
+	PathPrefix string
+	Port       int
+}
+
 type gatewayUpstreamTarget struct {
 	ConnectURL  *neturl.URL
 	LogicalHost string
@@ -40,7 +46,16 @@ func newGatewayProxyTransport() http.RoundTripper {
 }
 
 func (s *apiServer) handleGatewayProxy(w http.ResponseWriter, r *http.Request) {
-	proxyPathPrefix := gatewayPathPrefix(s.cfg.Gateway)
+	target := gatewayProxyTarget{
+		Name:       "gateway",
+		PathPrefix: gatewayPathPrefix(s.cfg.Gateway),
+		Port:       gatewayPort(s.cfg.Gateway),
+	}
+	s.handleGatewayProxyWithTarget(w, r, target)
+}
+
+func (s *apiServer) handleGatewayProxyWithTarget(w http.ResponseWriter, r *http.Request, target gatewayProxyTarget) {
+	proxyPathPrefix := target.PathPrefix
 	route, ok := parseGatewayProxyRoute(proxyPathPrefix, r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
@@ -50,12 +65,12 @@ func (s *apiServer) handleGatewayProxy(w http.ResponseWriter, r *http.Request) {
 	entry, ok := s.getGatewayIndex(route.UniqueID)
 	if !ok {
 		if err := s.refreshGatewayIndex(r.Context()); err != nil {
-			s.logError("refresh gateway index failed", err, "unique_id", route.UniqueID, "path", r.URL.Path)
+			s.logError("refresh gateway index failed", err, "gateway", target.Name, "unique_id", route.UniqueID, "path", r.URL.Path)
 		}
 		entry, ok = s.getGatewayIndex(route.UniqueID)
 	}
 	if !ok {
-		s.logWarn("gateway proxy route not found", "unique_id", route.UniqueID, "path", r.URL.Path, "http_status", http.StatusNotFound)
+		s.logWarn("gateway proxy route not found", "gateway", target.Name, "unique_id", route.UniqueID, "path", r.URL.Path, "http_status", http.StatusNotFound)
 		http.Error(w, "gateway route not found", http.StatusNotFound)
 		return
 	}
@@ -63,12 +78,13 @@ func (s *apiServer) handleGatewayProxy(w http.ResponseWriter, r *http.Request) {
 	proxyPrefix := buildGatewayProxyPrefix(proxyPathPrefix, entry.UniqueID)
 	r.Header.Set("X-Namespace", entry.Namespace)
 
-	upstreamTarget, err := s.resolveGatewayUpstreamTarget(r.Context(), entry, route.UpstreamPath)
+	upstreamTarget, err := s.resolveGatewayUpstreamTarget(r.Context(), entry, route.UpstreamPath, target.Port)
 	if err != nil {
 		s.logError(
 			"resolve gateway upstream failed",
 			err,
 			"http_status", http.StatusBadGateway,
+			"gateway", target.Name,
 			"unique_id", entry.UniqueID,
 			"namespace", entry.Namespace,
 			"name", entry.Name,
@@ -145,6 +161,7 @@ func (s *apiServer) resolveGatewayUpstreamTarget(
 	ctx context.Context,
 	entry gatewayIndexEntry,
 	upstreamPath string,
+	port int,
 ) (gatewayUpstreamTarget, error) {
 	pod, err := s.findDevboxPod(ctx, entry.Namespace, entry.Name)
 	if err != nil {
@@ -159,7 +176,9 @@ func (s *apiServer) resolveGatewayUpstreamTarget(
 		return gatewayUpstreamTarget{}, fmt.Errorf("devbox pod has empty podIP")
 	}
 
-	port := gatewayPort(s.cfg.Gateway)
+	if port <= 0 {
+		port = gatewayPort(s.cfg.Gateway)
+	}
 	return gatewayUpstreamTarget{
 		ConnectURL: &neturl.URL{
 			Scheme: "http",

@@ -55,6 +55,13 @@ gateway:
   # Default in-devbox gateway port exposed by the app ingress.
   port: 1317
 
+  # Code-server gateway route exposed by the same gateway listener.
+  # Example route:
+  # https://devbox-gateway.staging-usw-1.sealos.io/code-server/piano-stay-ndor
+  codeServer:
+    pathPrefix: "/code-server"
+    port: 1318
+
 devbox:
   createDefaults:
     # Runtime image for newly created devbox.

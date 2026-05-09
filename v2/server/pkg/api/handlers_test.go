@@ -477,6 +477,12 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 				Port     int    `json:"port"`
 				UniqueID string `json:"uniqueID"`
 			} `json:"gateway"`
+			CodeServerGateway struct {
+				URL      string `json:"url"`
+				Password string `json:"password"`
+				Port     int    `json:"port"`
+				UniqueID string `json:"uniqueID"`
+			} `json:"codeServerGateway"`
 			SSH struct {
 				PrivateKeyBase64 string `json:"privateKeyBase64"`
 			} `json:"ssh"`
@@ -494,6 +500,12 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 	if payload.Data.Gateway.URL != "https://devbox-gateway.staging-usw-1.sealos.io/codex/demo-unique-id" {
 		t.Fatalf("unexpected gateway url: %s", payload.Data.Gateway.URL)
 	}
+	if payload.Data.CodeServerGateway.Port != 1318 {
+		t.Fatalf("unexpected code-server gateway port: %d", payload.Data.CodeServerGateway.Port)
+	}
+	if payload.Data.CodeServerGateway.URL != "https://devbox-gateway.staging-usw-1.sealos.io/code-server/demo-unique-id" {
+		t.Fatalf("unexpected code-server gateway url: %s", payload.Data.CodeServerGateway.URL)
+	}
 	claims := decodeGatewayTokenClaimsForTest(t, payload.Data.Gateway.Token, "devbox-jwt-secret", time.Now().UTC())
 	if claims.Namespace != "ns-test" {
 		t.Fatalf("unexpected gateway token namespace: %s", claims.Namespace)
@@ -506,6 +518,12 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 	}
 	if payload.Data.Gateway.UniqueID != "demo-unique-id" {
 		t.Fatalf("unexpected uniqueID: %s", payload.Data.Gateway.UniqueID)
+	}
+	if payload.Data.CodeServerGateway.Password != "devbox-jwt-secret" {
+		t.Fatalf("unexpected code-server gateway password: %s", payload.Data.CodeServerGateway.Password)
+	}
+	if payload.Data.CodeServerGateway.UniqueID != "demo-unique-id" {
+		t.Fatalf("unexpected code-server gateway uniqueID: %s", payload.Data.CodeServerGateway.UniqueID)
 	}
 	entry, ok := srv.getGatewayIndex("demo-unique-id")
 	if !ok {
