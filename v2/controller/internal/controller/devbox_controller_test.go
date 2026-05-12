@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/helper"
+	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/matcher"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/resource"
 	"github.com/sealos-apps/devbox/v2/controller/internal/stat"
 	corev1 "k8s.io/api/core/v1"
@@ -61,8 +62,8 @@ var _ = Describe("Devbox Controller", func() {
 		return &DevboxReconciler{
 			Client:              k8sClient,
 			Scheme:              k8sClient.Scheme(),
-			Recorder:            record.NewFakeRecorder(32),
-			StateChangeRecorder: record.NewFakeRecorder(32),
+			Recorder:            record.NewFakeRecorder(1024),
+			StateChangeRecorder: record.NewFakeRecorder(1024),
 			NodeName:            nodeName,
 			AcceptanceThreshold: 0,
 			RequestRate: resource.RequestRate{
@@ -245,5 +246,50 @@ var _ = Describe("Devbox Controller", func() {
 			g.Expect(k8sClient.Get(ctx, typeNamespacedName, pod)).To(Succeed())
 			g.Expect(pod.Spec.ServiceAccountName).To(BeEmpty())
 		})
+	})
+
+	It("recreates the pod when running resources change", func() {
+		resourceName := fmt.Sprintf("test-resource-change-%s", rand.String(5))
+		typeNamespacedName := client.ObjectKey{Name: resourceName, Namespace: namespace}
+		devbox := newDevbox(resourceName, nil)
+		Expect(k8sClient.Create(ctx, devbox)).To(Succeed())
+
+		reconciler := buildReconciler()
+		reconciler.PodMatchers = []matcher.PodMatcher{matcher.ResourceMatcher{}}
+		reconcileEventually(reconciler, typeNamespacedName)
+		reconcileEventually(reconciler, typeNamespacedName)
+
+		firstPod := &corev1.Pod{}
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, firstPod)).To(Succeed())
+		})
+		firstUID := firstPod.UID
+		Expect(firstPod.Spec.Containers).To(HaveLen(1))
+		Expect(firstPod.Spec.Containers[0].Resources.Limits.Cpu().Cmp(apiresource.MustParse("1"))).
+			To(Equal(0))
+		Expect(firstPod.Spec.Containers[0].Resources.Limits.Memory().Cmp(apiresource.MustParse("1Gi"))).
+			To(Equal(0))
+
+		latestDevbox := &devboxv1alpha2.Devbox{}
+		Expect(k8sClient.Get(ctx, typeNamespacedName, latestDevbox)).To(Succeed())
+		latestDevbox.Spec.Resource[corev1.ResourceCPU] = apiresource.MustParse("2")
+		latestDevbox.Spec.Resource[corev1.ResourceMemory] = apiresource.MustParse("2Gi")
+		Expect(k8sClient.Update(ctx, latestDevbox)).To(Succeed())
+
+		Eventually(func(g Gomega) {
+			for i := 0; i < 6; i++ {
+				_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
+			pod := &corev1.Pod{}
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, pod)).To(Succeed())
+			g.Expect(pod.UID).NotTo(Equal(firstUID))
+			g.Expect(pod.Spec.Containers).To(HaveLen(1))
+			g.Expect(pod.Spec.Containers[0].Resources.Limits.Cpu().Cmp(apiresource.MustParse("2"))).
+				To(Equal(0))
+			g.Expect(pod.Spec.Containers[0].Resources.Limits.Memory().Cmp(apiresource.MustParse("2Gi"))).
+				To(Equal(0))
+		}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 	})
 })

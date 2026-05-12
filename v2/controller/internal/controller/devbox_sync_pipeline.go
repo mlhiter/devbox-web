@@ -8,6 +8,7 @@ import (
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	"github.com/sealos-apps/devbox/v2/controller/internal/commit"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/helper"
+	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/matcher"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/rwords"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -826,38 +827,14 @@ func (r *DevboxReconciler) syncPod(
 	}
 	switch devbox.Spec.State {
 	case devboxv1alpha2.DevboxStateRunning:
+		expectPod, err := r.generateExpectedRunningPod(ctx, devbox)
+		if err != nil {
+			return err
+		}
 		// get pod
 		switch len(podList.Items) {
 		case 0:
-			// check last devbox status
-			currentRecord := devbox.Status.CommitRecords[devbox.Status.ContentID]
-			if currentRecord == nil {
-				return errors.New("current record is nil")
-			}
-			if _, err := helper.EnsureCommitRecordRuntimeMetadata(
-				ctx,
-				r.Client,
-				currentRecord,
-				devbox.Spec.RuntimeClassName,
-			); err != nil {
-				return fmt.Errorf("failed to resolve runtime metadata: %w", err)
-			}
-			runtimeHandler := currentRecord.RuntimeHandler
-			if runtimeHandler == "" {
-				return fmt.Errorf("runtime handler is empty for devbox %s", devbox.Name)
-			}
-			// create a new pod with default image, with new content id
-			podOptions := []helper.DevboxPodOptions{
-				helper.WithPodImage(currentRecord.BaseImage),
-				helper.WithPodContentID(devbox.Status.ContentID),
-				helper.WithPodNodeName(currentRecord.Node),
-				helper.WithPodRuntimeHandler(runtimeHandler),
-			}
-			if r.MergeBaseImageTopLayer {
-				podOptions = append(podOptions, helper.WithPodInit(commit.AnnotationImageFromValue))
-			}
-			pod := r.generateDevboxPod(devbox, podOptions...)
-			if err := r.Create(ctx, pod); err != nil {
+			if err := r.Create(ctx, expectPod); err != nil {
 				return err
 			}
 		case 1:
@@ -867,6 +844,10 @@ func (r *DevboxReconciler) syncPod(
 			}
 			if podList.Items[0].Status.Phase != corev1.PodRunning &&
 				podList.Items[0].Status.Phase != corev1.PodPending {
+				return r.deletePod(ctx, devbox, &podList.Items[0])
+			}
+			if !matcher.PodMatchExpectations(expectPod, &podList.Items[0], r.PodMatchers...) {
+				logger.Info("pod does not match expectations, recreate pod", "pod", podList.Items[0].Name)
 				return r.deletePod(ctx, devbox, &podList.Items[0])
 			}
 			return nil
@@ -903,6 +884,38 @@ func (r *DevboxReconciler) syncPod(
 		return nil
 	}
 	return nil
+}
+
+func (r *DevboxReconciler) generateExpectedRunningPod(
+	ctx context.Context,
+	devbox *devboxv1alpha2.Devbox,
+) (*corev1.Pod, error) {
+	currentRecord := devbox.Status.CommitRecords[devbox.Status.ContentID]
+	if currentRecord == nil {
+		return nil, errors.New("current record is nil")
+	}
+	if _, err := helper.EnsureCommitRecordRuntimeMetadata(
+		ctx,
+		r.Client,
+		currentRecord,
+		devbox.Spec.RuntimeClassName,
+	); err != nil {
+		return nil, fmt.Errorf("failed to resolve runtime metadata: %w", err)
+	}
+	runtimeHandler := currentRecord.RuntimeHandler
+	if runtimeHandler == "" {
+		return nil, fmt.Errorf("runtime handler is empty for devbox %s", devbox.Name)
+	}
+	podOptions := []helper.DevboxPodOptions{
+		helper.WithPodImage(currentRecord.BaseImage),
+		helper.WithPodContentID(devbox.Status.ContentID),
+		helper.WithPodNodeName(currentRecord.Node),
+		helper.WithPodRuntimeHandler(runtimeHandler),
+	}
+	if r.MergeBaseImageTopLayer {
+		podOptions = append(podOptions, helper.WithPodInit(commit.AnnotationImageFromValue))
+	}
+	return r.generateDevboxPod(devbox, podOptions...), nil
 }
 
 func (r *DevboxReconciler) updateLastContainerStatus(

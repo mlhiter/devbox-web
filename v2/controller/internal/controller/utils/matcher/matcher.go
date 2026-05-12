@@ -91,15 +91,10 @@ func (e EnvVarMatcher) Match(expectPod, pod *corev1.Pod) bool {
 	container := pod.Spec.Containers[0]
 	expectContainer := expectPod.Spec.Containers[0]
 
-	if len(container.Env) != len(expectContainer.Env) {
-		slog.Info("Environment variable count mismatch")
-		return false
-	}
-
-	for _, env := range container.Env {
+	for _, expectEnv := range expectContainer.Env {
 		found := false
-		for _, expectEnv := range expectContainer.Env {
-			if env.Name == "SEALOS_COMMIT_IMAGE_NAME" {
+		for _, env := range container.Env {
+			if expectEnv.Name == "SEALOS_COMMIT_IMAGE_NAME" && env.Name == expectEnv.Name {
 				found = true
 				break
 			}
@@ -112,9 +107,9 @@ func (e EnvVarMatcher) Match(expectPod, pod *corev1.Pod) bool {
 			slog.Info(
 				"Environment variables are not equal",
 				"env not found",
-				env.Name,
+				expectEnv.Name,
 				"env value",
-				env.Value,
+				expectEnv.Value,
 			)
 			return false
 		}
