@@ -11,5 +11,6 @@ ENV certSecretName="wildcard-cert"
 ENV registryAddr="sealos.hub:5000"
 ENV registryUser=""
 ENV registryPassword=""
+ENV registryInsecure="true"
 
 CMD ["kubectl apply -f manifests"]

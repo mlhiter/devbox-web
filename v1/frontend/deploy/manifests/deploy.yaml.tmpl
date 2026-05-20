@@ -92,6 +92,8 @@ spec:
               value: {{ default "" .registryUser }}
             - name: REGISTRY_PASSWORD
               value: {{ default "" .registryPassword }}
+            - name: REGISTRY_INSECURE
+              value: "{{ default "false" .registryInsecure }}"
             - name: DEVBOX_AFFINITY_ENABLE
               value: 'true'
             - name: MONITOR_URL

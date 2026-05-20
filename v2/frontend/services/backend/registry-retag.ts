@@ -34,10 +34,15 @@ type RegistryCredentials = {
 
 type RegistryRequestOptions = {
   method?: string;
-  body?: BodyInit;
+  body?: BodyInit | ReadableStream<Uint8Array>;
   headers?: Record<string, string>;
   accept?: string;
   scope?: string | string[];
+};
+
+type FetchInit = Omit<RequestInit, 'body'> & {
+  body?: BodyInit | ReadableStream<Uint8Array>;
+  duplex?: 'half';
 };
 
 class RegistryRetagError extends Error {
@@ -50,23 +55,29 @@ class RegistryRetagError extends Error {
   }
 }
 
-const normalizeRegistry = (registry: string) => registry.replace(/^https?:\/\//, '');
+const normalizeRegistry = (registry: string) =>
+  registry.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+const isTruthyEnv = (value?: string) =>
+  ['1', 'true', 'yes', 'on'].includes(value?.toLowerCase() ?? '');
 
 const parseImageRef = (image: string): ImageRef => {
-  const trimmed = image.trim().replace(/^https?:\/\//, '');
+  const raw = image.trim();
+  const schemeMatch = raw.match(/^(https?:\/\/)(.+)$/);
+  const trimmed = schemeMatch ? schemeMatch[2] : raw;
   const firstSlash = trimmed.indexOf('/');
 
   if (firstSlash <= 0) {
     throw new RegistryRetagError(`Invalid image reference: ${image}`);
   }
 
-  const registry = trimmed.slice(0, firstSlash);
+  const registry = `${schemeMatch?.[1] || ''}${trimmed.slice(0, firstSlash)}`;
   const remainder = trimmed.slice(firstSlash + 1);
   const digestIndex = remainder.indexOf('@');
 
   if (digestIndex > 0) {
     return {
-      registry: normalizeRegistry(registry),
+      registry,
       repository: remainder.slice(0, digestIndex),
       reference: remainder.slice(digestIndex + 1)
     };
@@ -77,32 +88,22 @@ const parseImageRef = (image: string): ImageRef => {
 
   if (tagIndex > lastSlash) {
     return {
-      registry: normalizeRegistry(registry),
+      registry,
       repository: remainder.slice(0, tagIndex),
       reference: remainder.slice(tagIndex + 1)
     };
   }
 
   return {
-    registry: normalizeRegistry(registry),
+    registry,
     repository: remainder,
     reference: 'latest'
   };
 };
 
 const getRegistryCredentials = (): RegistryCredentials => {
-  const username =
-    process.env.REGISTRY_USER && process.env.REGISTRY_PASSWORD
-      ? process.env.REGISTRY_USER
-      : process.env.USER && process.env.PASSWORD
-        ? process.env.USER
-        : '';
-  const password =
-    process.env.REGISTRY_USER && process.env.REGISTRY_PASSWORD
-      ? process.env.REGISTRY_PASSWORD
-      : process.env.USER && process.env.PASSWORD
-        ? process.env.PASSWORD
-        : '';
+  const username = process.env.REGISTRY_USER || '';
+  const password = process.env.REGISTRY_PASSWORD || '';
 
   if (!username || !password) {
     throw new RegistryRetagError('Registry credentials are not configured');
@@ -111,7 +112,16 @@ const getRegistryCredentials = (): RegistryCredentials => {
   return { username, password };
 };
 
-const registryBaseUrl = (registry: string) => `http://${normalizeRegistry(registry)}`;
+const registryBaseUrl = (registry: string) => {
+  const trimmed = registry.trim().replace(/\/+$/, '');
+
+  if (/^https?:\/\//.test(trimmed)) {
+    return trimmed;
+  }
+
+  const scheme = isTruthyEnv(process.env.REGISTRY_INSECURE) ? 'http' : 'https';
+  return `${scheme}://${normalizeRegistry(trimmed)}`;
+};
 
 const authHeader = ({ username, password }: RegistryCredentials) =>
   `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
@@ -133,6 +143,39 @@ const parseAuthenticateHeader = (value: string) => {
     scheme: scheme?.toLowerCase(),
     params
   };
+};
+
+const bearerTokenCache = new Map<string, string>();
+
+const scopeCachePart = (scope?: string | string[]) =>
+  (Array.isArray(scope) ? [...scope].sort() : scope ? [scope] : []).join(',');
+
+const bearerTokenCacheKey = (
+  url: string | URL,
+  credentials: RegistryCredentials,
+  scope?: string | string[]
+) => `${new URL(url.toString()).origin}|${credentials.username}|${scopeCachePart(scope)}`;
+
+const preloadBearerToken = async (
+  url: string | URL,
+  credentials: RegistryCredentials,
+  scope?: string | string[]
+) => {
+  if (!scope) return null;
+
+  const registryOrigin = new URL(url.toString()).origin;
+  const response = await fetch(`${registryOrigin}/v2/`, {
+    cache: 'no-store',
+    headers: {
+      Authorization: authHeader(credentials)
+    }
+  });
+
+  if (response.status !== 401) {
+    return null;
+  }
+
+  return getBearerToken(response.headers.get('www-authenticate') || '', credentials, scope);
 };
 
 const getBearerToken = async (
@@ -178,41 +221,57 @@ const getBearerToken = async (
 const fetchWithAuthRetry = async (
   url: string | URL,
   credentials: RegistryCredentials,
-  init: RequestInit,
+  init: FetchInit,
   scope?: string | string[]
 ) => {
-  const requestInit: RequestInit = {
+  const tokenCacheKey = bearerTokenCacheKey(url, credentials, scope);
+  const isStreamingBody = init.body instanceof ReadableStream;
+  let bearerToken = bearerTokenCache.get(tokenCacheKey);
+
+  if (isStreamingBody && !bearerToken) {
+    bearerToken = (await preloadBearerToken(url, credentials, scope)) || undefined;
+    if (bearerToken) {
+      bearerTokenCache.set(tokenCacheKey, bearerToken);
+    }
+  }
+
+  const requestInit: FetchInit = {
     ...init,
     cache: 'no-store',
+    duplex: isStreamingBody ? 'half' : init.duplex,
     headers: {
-      Authorization: authHeader(credentials),
+      Authorization: bearerToken ? `Bearer ${bearerToken}` : authHeader(credentials),
       ...(init.headers || {})
     }
   };
 
-  const response = await fetch(url, requestInit);
+  const response = await fetch(url, requestInit as RequestInit);
 
   if (response.status !== 401) {
     return response;
   }
 
-  const bearerToken = await getBearerToken(
-    response.headers.get('www-authenticate') || '',
-    credentials,
-    scope
-  );
+  if (isStreamingBody) {
+    return response;
+  }
+
+  bearerToken =
+    (await getBearerToken(response.headers.get('www-authenticate') || '', credentials, scope)) ||
+    undefined;
 
   if (!bearerToken) {
     return response;
   }
+  bearerTokenCache.set(tokenCacheKey, bearerToken);
 
-  return fetch(url, {
+  const retryInit: FetchInit = {
     ...requestInit,
     headers: {
       ...requestInit.headers,
       Authorization: `Bearer ${bearerToken}`
     }
-  });
+  };
+  return fetch(url, retryInit as RequestInit);
 };
 
 const readErrorBody = async (response: Response) => {
@@ -237,6 +296,7 @@ const registryFetch = async (
     {
       method: options.method || 'GET',
       body: options.body,
+      duplex: options.body instanceof ReadableStream ? 'half' : undefined,
       headers: {
         ...(options.accept ? { Accept: options.accept } : {}),
         ...options.headers
@@ -364,7 +424,10 @@ const uploadBlob = async (
   );
   await assertOk(blobResponse, `Download blob ${digest}`);
 
-  const blob = await blobResponse.arrayBuffer();
+  if (!blobResponse.body) {
+    throw new RegistryRetagError(`Download blob ${digest} did not return a response body`);
+  }
+
   const startResponse = await registryFetch(
     target,
     `/v2/${target.repository}/blobs/uploads/`,
@@ -391,10 +454,9 @@ const uploadBlob = async (
     credentials,
     {
       method: 'PUT',
-      body: blob,
+      body: blobResponse.body,
       headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': String(blob.byteLength)
+        'Content-Type': 'application/octet-stream'
       }
     },
     `repository:${target.repository}:pull,push`
@@ -417,7 +479,7 @@ const ensureBlob = async (
   }
 
   if (
-    source.registry === target.registry &&
+    normalizeRegistry(source.registry) === normalizeRegistry(target.registry) &&
     (await mountBlob(source, target, digest, credentials))
   ) {
     return;
