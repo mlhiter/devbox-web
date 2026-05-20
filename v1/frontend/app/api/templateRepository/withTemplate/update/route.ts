@@ -1,10 +1,10 @@
 import { TagType } from '@/prisma/generated/client';
 import { authSessionWithJWT } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
+import { retagImage } from '@/services/backend/registry-retag';
 import { jsonRes } from '@/services/backend/response';
 import { devboxDB } from '@/services/db/init';
 import { ERROR_ENUM } from '@/services/error';
-import { retagSvcClient } from '@/services/retag';
 import { KBDevboxReleaseType, KBDevboxTypeV2 } from '@/types/k8s';
 import { getRegionUid } from '@/utils/env';
 import { mergeTemplateDefaults } from '@/utils/templateConfig';
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       });
     }
     const query = updateTemplateSchema.parse(queryRaw);
-    const { kubeConfig, payload, token } = await authSessionWithJWT(headerList);
+    const { kubeConfig, payload } = await authSessionWithJWT(headerList);
     const { namespace, k8sCustomObjects } = await getK8s({
       kubeconfig: kubeConfig
     });
@@ -107,14 +107,7 @@ export async function POST(req: NextRequest) {
       original: originalImage,
       target: tagretImage
     };
-    const retagResult = await retagSvcClient.post('/tag', retagbody, {
-      headers: {
-        Authorization: token
-      }
-    });
-    if (retagResult.status !== 200) {
-      throw Error('retag failed');
-    }
+    await retagImage(retagbody.original, retagbody.target);
     const officialTagList = await devboxDB.tag.findMany({
       where: {
         type: TagType.OFFICIAL_CONTENT
