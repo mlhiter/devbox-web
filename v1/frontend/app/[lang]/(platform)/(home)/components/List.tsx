@@ -29,7 +29,6 @@ import {
   type HeaderContext,
   type CellContext
 } from '@tanstack/react-table';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
@@ -63,6 +62,7 @@ import DatePicker from '@/components/DatePicker';
 import { Separator } from '@labring/sealos-ui/separator';
 import SearchEmpty from './SearchEmpty';
 import GPUItem from '@/components/GPUItem';
+import { RuntimeIcon } from '@/components/RuntimeIcon';
 
 const DeleteDevboxDialog = dynamic(() => import('@/components/dialogs/DeleteDevboxDialog'));
 const EditRemarkDialog = dynamic(() => import('@/components/dialogs/EditRemarkDialog'));
@@ -203,23 +203,13 @@ const DevboxList = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex h-8 min-w-8 items-center justify-center rounded-lg border-[0.5px] border-zinc-200 bg-zinc-50">
-                      <Image
-                        width={21}
-                        height={21}
-                        alt={item.template.name}
-                        src={`/images/runtime/${iconId}.svg`}
-                      />
+                      <RuntimeIcon iconId={iconId} alt={item.template.name} />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" align="start" sideOffset={1}>
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px] border-zinc-200 bg-zinc-50">
-                        <Image
-                          width={21}
-                          height={21}
-                          alt={item.template.name}
-                          src={`/images/runtime/${iconId}.svg`}
-                        />
+                        <RuntimeIcon iconId={iconId} alt={item.template.name} />
                       </div>
                       <div className="flex flex-col">
                         <p className="text-sm/5 font-medium">{iconId}</p>
@@ -672,8 +662,8 @@ const DevboxList = ({
   return (
     <>
       {/* table */}
-      <div className="flex h-full w-full flex-col justify-between">
-        <div className="flex h-full flex-col gap-3 overflow-x-auto">
+      <div className="flex w-full flex-col gap-3">
+        <div className="flex flex-col gap-3 overflow-x-auto">
           {/* table header */}
           <div className="flex h-10 min-w-[1350px] items-center rounded-lg border-[0.5px] bg-white px-6 py-1 text-sm/5 text-zinc-500 shadow-[0px_2px_8px_-2px_rgba(0,0,0,0.08)]">
             {table.getFlatHeaders().map((header) => (
@@ -707,11 +697,20 @@ const DevboxList = ({
         </div>
         {/* pagination */}
         {table.getRowModel().rows.length > 0 && (
-          <Pagination
-            currentPage={table.getState().pagination.pageIndex + 1}
-            totalPages={table.getPageCount()}
-            onPageChange={(page) => table.setPageIndex(page - 1)}
-          />
+          <div className="flex items-center justify-between gap-2.5 pt-2 text-sm/5 text-zinc-500">
+            <span>{t('Total') + ': ' + table.getFilteredRowModel().rows.length}</span>
+            <div className="flex items-center gap-3">
+              <Pagination
+                currentPage={table.getState().pagination.pageIndex + 1}
+                totalPages={table.getPageCount()}
+                onPageChange={(page) => table.setPageIndex(page - 1)}
+              />
+              <div className="flex items-center gap-1">
+                <span className="text-zinc-900">{table.getState().pagination.pageSize}</span>/
+                <span>{t('Page')}</span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
