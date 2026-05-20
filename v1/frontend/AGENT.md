@@ -1,21 +1,23 @@
-# Devbox Provider Agent Notes
+# Devbox V1 Frontend Agent Notes
 
 ## Scope
 
-This directory is the Devbox provider in the Sealos frontend workspace. It owns
-the DevBox list, create/edit flow, detail page, template conversion UI, release
-and deployment actions, and provider-side API routes under `app/api`.
+This directory is the standalone Devbox v1 frontend in the `labring/devbox`
+repository. It owns the DevBox list, create/edit flow, detail page, template
+conversion UI, release and deployment actions, and frontend-side API routes
+under `app/api`.
 
 ## Working Rules
 
-- Keep changes scoped to `frontend/providers/devbox` unless the task clearly
-  crosses a shared package boundary.
+- Keep changes scoped to `v1/frontend` unless the task clearly crosses another
+  Devbox component boundary.
 - Do not execute database writes or migrations unless the user explicitly asks.
 - For production or test cloud images, build `linux/amd64` by default.
 - For 70-cluster work, use `KUBECONFIG=/Users/mlhiter/.kube/70` and namespace
   `devbox-frontend` unless the user gives a different target.
-- The deployed image path uses the monorepo root `frontend/Dockerfile` with
-  `--build-arg name=devbox --build-arg path=providers/devbox`.
+- The image build path in this repository uses `v1/frontend/Dockerfile` with
+  build context `v1/frontend`; do not use the old Sealos monorepo provider
+  build arguments here.
 - The deployment has both `devbox-frontend-init` and `devbox-frontend`
   containers. Inspect both image tags when verifying a rollout.
 - Use the Codex in-app Browser for local browser verification.

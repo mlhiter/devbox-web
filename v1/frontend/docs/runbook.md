@@ -2,11 +2,10 @@
 
 ## Local Setup
 
-Start from the frontend workspace setup in `frontend/README.md`, then create a
-provider env file:
+Start from the v1 frontend directory, then create a local env file:
 
 ```bash
-cd /Users/mlhiter/labring/sealos/frontend/providers/devbox
+cd /Users/mlhiter/labring/devbox/v1/frontend
 cp .env.template .env.local
 ```
 
@@ -75,19 +74,18 @@ export KUBECONFIG=/Users/mlhiter/.kube/70
 kubectl -n devbox-frontend get deploy devbox-frontend
 ```
 
-Default production/test-cloud image builds should be `linux/amd64`. The live
-image is built from the monorepo root `frontend/Dockerfile`, not the provider
-local Dockerfile:
+Default production/test-cloud image builds should be `linux/amd64`. In this
+repository, build the v1 frontend image from `v1/frontend/Dockerfile` with
+`v1/frontend` as the Docker context:
 
 ```bash
-cd /Users/mlhiter/labring/sealos/frontend
+cd /Users/mlhiter/labring/devbox
 docker buildx build \
   --platform linux/amd64 \
-  -f Dockerfile \
-  --build-arg name=devbox \
-  --build-arg path=providers/devbox \
+  -f v1/frontend/Dockerfile \
   --push \
-  -t crpi-7jr40k6elhldekqp.cn-hangzhou.personal.cr.aliyuncs.com/mlhiter/sealos-devbox-frontend:<tag> .
+  -t crpi-7jr40k6elhldekqp.cn-hangzhou.personal.cr.aliyuncs.com/mlhiter/devbox-v1-frontend:<tag> \
+  v1/frontend
 ```
 
 After swapping an image, verify both init and main images:

@@ -2,12 +2,12 @@
 
 ## Internal References
 
-- `frontend/README.md` - frontend workspace setup.
-- `frontend/providers/devbox/prisma/README.md` - Prisma schema layout.
-- `frontend/providers/devbox/.env.template` - environment variable template.
-- `frontend/providers/devbox/deploy/manifests/deploy.yaml.tmpl` - deployment and
-  migration container shape.
-- `frontend/providers/devbox/deploy/manifests/ingress.yaml.tmpl` - frontend and
+- `README.md` - local frontend setup.
+- `prisma/README.md` - Prisma schema layout.
+- `.env.template` - environment variable template.
+- `deploy/manifests/deploy.yaml.tmpl` - deployment and migration container
+  shape.
+- `deploy/manifests/ingress.yaml.tmpl` - frontend and
   domain-challenge ingress shape.
 
 ## Issue References

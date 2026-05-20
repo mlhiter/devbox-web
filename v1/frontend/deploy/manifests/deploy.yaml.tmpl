@@ -48,7 +48,7 @@ spec:
           - -c
           args:
           - |-
-            cd /app/providers/devbox
+            cd /app
             DB_PROVIDER="${DATABASE_PROVIDER:-cockroachdb}"
             SCHEMA_PATH="./prisma/cockroach/schema.prisma"
             if [ "$DB_PROVIDER" = "postgresql" ] || [ "$DB_PROVIDER" = "postgres" ] || [ "$DB_PROVIDER" = "pg" ]; then
