@@ -15,9 +15,9 @@ import { patchYamlList } from '@/utils/tools';
 import { normalizeStorageDefaultGi } from '@/utils/storage';
 import { useConfirm } from '@/hooks/useConfirm';
 import { generateYamlList } from '@/utils/json2Yaml';
-import { createDevbox, updateDevbox } from '@/api/devbox';
+import { createDevbox, restartDevbox, updateDevbox } from '@/api/devbox';
 import type { DevboxEditTypeV2, DevboxKindsType } from '@/types/devbox';
-import { defaultDevboxEditValueV2, editModeMap, GpuAmountMarkList } from '@/constants/devbox';
+import { defaultDevboxEditValueV2, editModeMap, GPU_AMOUNT_MAX } from '@/constants/devbox';
 
 import { useEnvStore } from '@/stores/env';
 import { useIDEStore } from '@/stores/ide';
@@ -33,6 +33,17 @@ import { Loading } from '@labring/sealos-ui/loading';
 import { track } from '@labring/sealos-gtm-sdk';
 import { listTemplate } from '@/api/template';
 import { z } from 'zod';
+
+const normalizeConfigMaps = (configMaps: DevboxEditTypeV2['configMaps'] = []) =>
+  JSON.stringify(
+    configMaps
+      .map((item) => ({
+        id: item.id || '',
+        path: item.path,
+        content: item.content
+      }))
+      .sort((a, b) => `${a.id}:${a.path}`.localeCompare(`${b.id}:${b.path}`))
+  );
 
 const DevboxCreatePage = () => {
   const router = useRouter();
@@ -101,10 +112,7 @@ const DevboxCreatePage = () => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const isEdit = useMemo(() => !!devboxName, []);
-  const maxGpuAmount = useMemo(
-    () => GpuAmountMarkList[GpuAmountMarkList.length - 1]?.value ?? 4,
-    []
-  );
+  const maxGpuAmount = GPU_AMOUNT_MAX;
 
   useEffect(() => {
     if (isEdit) return;
@@ -125,6 +133,11 @@ const DevboxCreatePage = () => {
   const { openConfirm, ConfirmChild } = useConfirm({
     content: applyMessage
   });
+  const { openConfirm: openConfigMapRestartConfirm, ConfirmChild: ConfigMapRestartConfirmChild } =
+    useConfirm({
+      content: 'confirm_update_configmap_restart_devbox',
+      confirmText: 'confirm_update_and_restart'
+    });
 
   const templateRepositoryUid = formHook.watch('templateRepositoryUid');
   const isValidTemplateRepositoryUid = z.string().uuid().safeParse(templateRepositoryUid).success;
@@ -229,6 +242,18 @@ const DevboxCreatePage = () => {
   );
   const { guideConfigDevbox } = useGuideStore();
 
+  const hasConfigMapsChanged = useCallback(
+    (formData: DevboxEditTypeV2) => {
+      if (!isEdit || !oldDevboxEditData.current) return false;
+
+      return (
+        normalizeConfigMaps(oldDevboxEditData.current.configMaps) !==
+        normalizeConfigMaps(formData.configMaps)
+      );
+    },
+    [isEdit]
+  );
+
   const submitSuccess = async (formData: DevboxEditTypeV2) => {
     if (!guideConfigDevbox) {
       return router.push('/devbox/detail/devbox-mock');
@@ -252,6 +277,8 @@ const DevboxCreatePage = () => {
       }
 
       // update
+      const shouldRestartAfterUpdate = isEdit && hasConfigMapsChanged(formData);
+
       if (isEdit) {
         const yamlList = generateYamlList(formData, env);
         setYamlList(yamlList);
@@ -284,6 +311,14 @@ const DevboxCreatePage = () => {
           module: 'devbox',
           context: 'app'
         });
+        if (shouldRestartAfterUpdate) {
+          await restartDevbox({ devboxName: formData.name });
+          track({
+            event: 'deployment_restart',
+            module: 'devbox',
+            context: 'app'
+          });
+        }
       } else {
         await createDevbox(formData);
         track({
@@ -302,7 +337,7 @@ const DevboxCreatePage = () => {
       }
       addDevboxIDE('vscode', formData.name);
 
-      toast.success(t(applySuccess));
+      toast.success(t(shouldRestartAfterUpdate ? 'update_and_restart_success' : applySuccess));
 
       if (sourcePrice?.gpu) {
         refetchPrice();
@@ -348,12 +383,15 @@ const DevboxCreatePage = () => {
             applyBtnText={applyBtnText}
             applyCb={() =>
               formHook.handleSubmit(
-                (data) => openConfirm(() => submitSuccess(data))(),
+                (data) =>
+                  (hasConfigMapsChanged(data) ? openConfigMapRestartConfirm : openConfirm)(() =>
+                    submitSuccess(data)
+                  )(),
                 submitError
               )()
             }
           />
-          <div className="w-full px-5 pt-10 pb-30 md:px-10 lg:px-20">
+          <div className="w-full px-5 pb-[120px] pt-10 md:px-10 lg:px-20">
             {tabType === 'form' ? (
               <Form isEdit={isEdit} countGpuInventory={countGpuInventory} />
             ) : (
@@ -363,6 +401,7 @@ const DevboxCreatePage = () => {
         </div>
       </FormProvider>
       <ConfirmChild />
+      <ConfigMapRestartConfirmChild />
     </>
   );
 };

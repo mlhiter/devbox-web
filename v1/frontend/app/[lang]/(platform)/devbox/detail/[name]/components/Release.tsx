@@ -28,6 +28,7 @@ import { delDevboxVersionByName, getAppsByDevboxId } from '@/api/devbox';
 import { devboxIdKey, DevboxReleaseStatusEnum } from '@/constants/devbox';
 import { getTemplateConfig, listPrivateTemplateRepository } from '@/api/template';
 import { useErrorMessage } from '@/hooks/useErrorMessage';
+import { sanitizeTemplateDefaults } from '@/utils/templateConfig';
 
 import {
   Table,
@@ -115,6 +116,14 @@ const Release = () => {
   );
   const templateRepositoryList =
     listPrivateTemplateRepositoryQuery.data?.templateRepositoryList || [];
+  const initialTemplateDefaults = useMemo(
+    () =>
+      sanitizeTemplateDefaults({
+        envs: devbox?.envs || [],
+        configMaps: devbox?.configMaps || []
+      }),
+    [devbox?.configMaps, devbox?.envs]
+  );
 
   const handleDeploy = useCallback(
     async (version: DevboxVersionListItemType) => {
@@ -123,7 +132,18 @@ const Release = () => {
       const config = parseTemplateConfig(result.template.config);
       const releaseArgs = config.releaseArgs.join(' ');
       const releaseCommand = config.releaseCommand.join(' ');
-      const { cpu, memory, sharedMemory, networks, name, gpu, configMaps, volumes, envs, tolerations } = devbox;
+      const {
+        cpu,
+        memory,
+        sharedMemory,
+        networks,
+        name,
+        gpu,
+        configMaps,
+        volumes,
+        envs,
+        tolerations
+      } = devbox;
       const newNetworks = networks
         .filter((network) => network.port !== env.webIdePort)
         .map((network) => {
@@ -163,17 +183,12 @@ const Release = () => {
           [devboxIdKey]: devbox.id
         },
         configMapList:
-          configMaps?.map((cm) => {
-            const key = cm.path.split('/').filter(Boolean).pop() || 'config';
-
-            return {
-              mountPath: cm.path,
-              value: cm.content,
-              key,
-              volumeName: `${name}-volume-cm-${cm.id}`,
-              subPath: key
-            };
-          }) || [],
+          configMaps?.map((cm) => ({
+            mountPath: cm.path,
+            value: cm.content,
+            key: cm.path.split('/').pop() || 'config',
+            volumeName: `${name}-volume-cm-${cm.id}`
+          })) || [],
         storeList:
           volumes?.map((vol) => ({
             name: `${name}-pvc-${vol.id}`,
@@ -266,7 +281,7 @@ const Release = () => {
         title: t('version_number'),
         key: 'tag',
         render: (item: DevboxVersionListItemType) => (
-          <div className="max-w-50 truncate text-zinc-900">{item.tag}</div>
+          <div className="max-w-[200px] truncate text-zinc-900">{item.tag}</div>
         )
       },
       {
@@ -288,7 +303,7 @@ const Release = () => {
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="max-w-50 cursor-pointer truncate">{item.description}</span>
+                <span className="max-w-[200px] cursor-pointer truncate">{item.description}</span>
               </TooltipTrigger>
               <TooltipContent className="max-w-[300px] break-words whitespace-pre-wrap">
                 <p>{item.description}</p>
@@ -361,7 +376,7 @@ const Release = () => {
   if (!initialized || isLoading) return <Loading />;
 
   return (
-    <div className="flex h-[40%] flex-col items-center gap-4 rounded-xl border-[0.5px] bg-white px-6 py-5 shadow-xs">
+    <div className="flex h-[25%] min-h-0 flex-col items-center gap-3 overflow-hidden rounded-xl border-[0.5px] bg-white px-6 py-4 shadow-xs">
       <div className="flex w-full items-center justify-between !overflow-visible">
         <span className="text-lg/7 font-medium">{t('version_history')}</span>
         <Button className="guide-release-button" onClick={handleOpenRelease} variant="outline">
@@ -383,7 +398,7 @@ const Release = () => {
           </div>
         </div>
       ) : (
-        <ScrollArea className="w-full">
+        <ScrollArea className="min-h-0 w-full flex-1">
           <Table>
             <TableHeader>
               <TableRow>
@@ -439,6 +454,7 @@ const Release = () => {
         isOpen={isCreateTemplateDrawerOpen}
         onClose={() => setIsCreateTemplateDrawerOpen(false)}
         devboxReleaseName={currentVersion?.name || ''}
+        initialTemplateDefaults={initialTemplateDefaults}
       />
       {templateRepositoryList.length > 0 && (
         <CreateOrUpdateDrawer
@@ -459,6 +475,7 @@ const Release = () => {
           isOpen={isUpdateTemplateDrawerOpen}
           onClose={() => setIsUpdateTemplateDrawerOpen(false)}
           devboxReleaseName={currentVersion?.name || ''}
+          initialTemplateDefaults={initialTemplateDefaults}
         />
       )}
     </div>

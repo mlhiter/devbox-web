@@ -1,13 +1,8 @@
-SERVICE_NAME ?= ghcr.io/sealos-apps/devbox-v1-frontend
+SERVICE_NAME=sealos-devbox
 # Image URL to use all building/pushing image targets
 IMG ?= $(SERVICE_NAME):latest
 PNPM ?= pnpm
 PNPM_INSTALL_FLAGS ?= --frozen-lockfile
-CONTAINER_TOOL ?= docker
-DOCKERFILE ?= Dockerfile
-DOCKER_BUILD_ARGS ?=
-BUILDX_BUILDER ?= devbox-builder
-PLATFORMS ?= linux/amd64,linux/arm64
 
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
@@ -56,7 +51,7 @@ verify: ## Run the standard frontend verification pipeline.
 ##@ Build
 
 .PHONY: build
-build: ## Build frontend application.
+build: ## Build desktop-frontend binary.
 	$(PNPM) run build
 
 .PHONY: dev
@@ -64,20 +59,9 @@ dev: ## Run the frontend in development mode.
 	$(PNPM) run dev
 
 .PHONY: run
-run: ## Run the frontend in production mode.
+run: ## Run a dev service from host.
 	$(PNPM) run start
 
 .PHONY: docker-build
-docker-build: ## Build docker image for the frontend.
-	$(CONTAINER_TOOL) build $(DOCKER_BUILD_ARGS) -t ${IMG} -f $(DOCKERFILE) .
-
-.PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the frontend for cross-platform support.
-	- $(CONTAINER_TOOL) buildx create --name $(BUILDX_BUILDER)
-	$(CONTAINER_TOOL) buildx use $(BUILDX_BUILDER)
-	- $(CONTAINER_TOOL) buildx build --push $(DOCKER_BUILD_ARGS) --platform=$(PLATFORMS) --tag ${IMG} -f $(DOCKERFILE) .
-	- $(CONTAINER_TOOL) buildx rm $(BUILDX_BUILDER)
-
-.PHONY: docker-push
-docker-push: ## Push docker image for the frontend.
-	$(CONTAINER_TOOL) push ${IMG}
+docker-build: ## Build docker image with the desktop-frontend.
+	docker build -t sealos-devbox:latest . --network host --build-arg DEVBOX_COMMIT_HASH=$$(git rev-parse --short=12 HEAD) --build-arg HTTP_PROXY=http://127.0.0.1:7890 --build-arg HTTPS_PROXY=http://127.0.0.1:7890

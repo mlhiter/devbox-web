@@ -8,12 +8,18 @@ import { useTranslations } from 'next-intl';
 
 import { YamlKindEnum, gpuTypeAnnotationKey } from '@/constants/devbox';
 import type { DevboxKindsType, DevboxPatchPropsType } from '@/types/devbox';
+import { getRuntimeTemplateConfig } from '@/utils/templateConfig';
 
 dayjs.extend(duration);
 
 const decodeJsonPointerToken = (token: string) => token.replace(/~1/g, '/').replace(/~0/g, '~');
 const isUnsafeProtoKey = (key: string) =>
   key === '__proto__' || key === 'prototype' || key === 'constructor';
+const DEVBOX_CONFIG_MERGE_PATCH_DELETE_PATHS = new Set([
+  '/spec/config/env',
+  '/spec/config/volumes',
+  '/spec/config/volumeMounts'
+]);
 
 export const cpuFormatToM = (cpu = '0') => {
   if (!cpu || cpu === '0') {
@@ -292,7 +298,8 @@ export const patchYamlList = ({
                 }
               } else if (
                 op.path.startsWith('/spec/resource/') ||
-                op.path.startsWith('/spec/config/annotations/')
+                op.path.startsWith('/spec/config/annotations/') ||
+                DEVBOX_CONFIG_MERGE_PATCH_DELETE_PATHS.has(op.path)
               ) {
                 // Handle removal of specific fields
                 const fieldPath = op.path
@@ -452,7 +459,7 @@ export const isElementInViewport = (element: Element) => {
 export const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz', 12);
 
 export const parseTemplateConfig = (config: string) => {
-  return JSON.parse(config) as {
+  return JSON.parse(getRuntimeTemplateConfig(config)) as {
     user: string;
     workingDir: string;
     releaseCommand: string[];
@@ -490,7 +497,6 @@ export const parseTemplateConfig = (config: string) => {
     volumeMounts?: {
       name: string;
       mountPath: string;
-      subPath?: string;
     }[];
   };
 };

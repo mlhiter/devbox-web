@@ -7,12 +7,9 @@ WORKDIR /app
 # Install dependencies based on the preferred package manager
 COPY package.json pnpm-lock.yaml* ./
 COPY prisma ./prisma
-RUN if [ -f pnpm-lock.yaml ]; then \
-    pnpm install; \
-  else \
-    echo "Lockfile not found."; \
-    exit 1; \
-  fi
+RUN \
+  [ -f pnpm-lock.yaml ] && pnpm install || \
+  (echo "Lockfile not found." && exit 1)
 
 # Rebuild the source code only when needed
 FROM node:current-alpine AS builder
@@ -26,6 +23,8 @@ COPY --from=deps /app/prisma/generated ./prisma/generated
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NEXT_PUBLIC_MOCK_USER ''
+ARG DEVBOX_COMMIT_HASH=source-unavailable
+ENV NEXT_PUBLIC_DEVBOX_COMMIT_HASH=${DEVBOX_COMMIT_HASH}
 
 RUN npm install -g pnpm && pnpm run build
 
@@ -59,6 +58,10 @@ COPY --from=builder /app/package.json ./package.json
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Next standalone includes prisma schemas/clients but not migrations.
+# Keep both providers' migrations for initContainer migrate deploy.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/cockroach/migrations ./providers/devbox/prisma/cockroach/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/postgresql/migrations ./providers/devbox/prisma/postgresql/migrations
 
 USER nextjs
 

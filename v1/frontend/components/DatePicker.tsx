@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Calendar, RefreshCw } from 'lucide-react';
 import { ChangeEventHandler, useMemo, useState } from 'react';
 import { endOfDay, format, isAfter, isBefore, isMatch, isValid, parse, startOfDay } from 'date-fns';
-import { DateRange, DayPicker, SelectRangeEventHandler } from 'react-day-picker';
+import { DateRange, DayPicker, SelectRangeEventHandler, type DayPickerProps } from 'react-day-picker';
 
 import { cn } from '@labring/sealos-ui';
 import { useDateTimeStore } from '@/stores/date';
@@ -359,15 +359,15 @@ const DatePicker = ({
             </span>
           </div>
         </PopoverTrigger>
-        <PopoverContent className="w-105 p-0" align="start">
-          <div className="flex min-h-100 w-80">
-            <div className="flex flex-col">
+        <PopoverContent className="w-[432px] p-0" align="start">
+          <div className="flex min-h-[400px]">
+            <div className="flex min-w-0 flex-1 flex-col">
               <DayPicker
                 navLayout="around"
                 mode="range"
                 selected={selectedRange}
                 onSelect={handleRangeSelect}
-                locale={currentLang === 'zh' ? (zhCN as any) : (enUS as any)}
+                locale={(currentLang === 'zh' ? zhCN : enUS) as DayPickerProps['locale']}
                 weekStartsOn={0}
               />
               <Separator className="bg-zinc-100" />
@@ -415,13 +415,13 @@ const DatePicker = ({
             </div>
             <Separator orientation="vertical" className="bg-zinc-100" />
             {/* right date */}
-            <div className="w-full px-2 py-3">
+            <div className="flex w-[148px] shrink-0 flex-col py-3 pl-2 pr-4">
               {recentDateList.map((item) => (
                 <Button
                   key={JSON.stringify(item.value)}
                   variant="ghost"
                   className={cn(
-                    'h-9 w-31 justify-start rounded p-2 text-sm font-normal text-zinc-900',
+                    'h-9 w-full justify-start rounded p-2 text-sm font-normal text-zinc-900',
                     recentDate.compareValue === item.compareValue && 'bg-blue-50 text-blue-600'
                   )}
                   onClick={() => handleRecentDateClick(item)}
@@ -484,7 +484,7 @@ const DatePickerInput = ({
     <div className="relative">
       <Input
         className={cn(
-          'h-8 w-30 bg-white pl-2 text-xs text-zinc-900',
+          'h-8 w-[120px] bg-white pl-2 text-xs text-zinc-900',
           error && 'border-red-500 hover:border-red-500',
           showError && 'animate-shake border-red-500 hover:border-red-500'
         )}

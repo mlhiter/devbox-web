@@ -10,6 +10,7 @@ import { useCopyData } from '@/utils/tools';
 import { checkReady } from '@/api/platform';
 import { NetworkType } from '@/types/devbox';
 import { useDevboxStore } from '@/stores/devbox';
+import { DevboxStatusEnum } from '@/constants/devbox';
 
 import {
   Table,
@@ -33,14 +34,13 @@ const Network = () => {
   const { env } = useEnvStore();
   const { copyData } = useCopyData();
   const { devboxDetail } = useDevboxStore();
+  const devboxStatus = devboxDetail?.status.value;
+  const isDevboxRunning = devboxStatus === DevboxStatusEnum.Running;
 
   const retryCount = useRef(0);
   const { data: networkStatus, refetch } = useQuery({
-    queryKey: ['networkStatus', devboxDetail?.name],
-    queryFn: () =>
-      devboxDetail?.name && devboxDetail?.status.value === 'Running'
-        ? checkReady(devboxDetail?.name)
-        : [],
+    queryKey: ['networkStatus', devboxDetail?.name, devboxStatus],
+    queryFn: () => (devboxDetail?.name && isDevboxRunning ? checkReady(devboxDetail?.name) : []),
     retry: 5,
     retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
     refetchOnWindowFocus: 'always',
@@ -138,7 +138,7 @@ const Network = () => {
           <div className="flex items-center gap-2">
             {displayAddress && (
               <div className="min-w-fit">
-                {statusMap[displayAddress]?.ready ? (
+                {isDevboxRunning && statusMap[displayAddress]?.ready ? (
                   <div className="flex cursor-pointer items-center gap-2 rounded-full border-[0.5px] border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs/4 font-medium">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
                     <span className="text-emerald-600">{t('Accessible')}</span>
@@ -223,7 +223,7 @@ const Network = () => {
   };
 
   return (
-    <div className="flex h-full max-h-[400px] flex-col items-center gap-3 rounded-xl border-[0.5px] bg-white px-6 py-5 shadow-xs">
+    <div className="flex min-h-0 max-h-[400px] flex-1 flex-col items-center gap-3 overflow-hidden rounded-xl border-[0.5px] bg-white px-6 py-5 shadow-xs">
       {/* title */}
       <div className="flex w-full items-center justify-between">
         <span className="text-lg/7 font-medium text-accent-foreground">{t('network')}</span>
@@ -233,7 +233,7 @@ const Network = () => {
       </div>
       {/* table */}
       {devboxDetail?.networks && devboxDetail.networks.length > 0 ? (
-        <ScrollArea className="w-full min-w-0">
+        <ScrollArea className="min-h-0 w-full min-w-0 flex-1">
           <Table className="w-full table-fixed">
             <TableHeader>
               <TableRow>

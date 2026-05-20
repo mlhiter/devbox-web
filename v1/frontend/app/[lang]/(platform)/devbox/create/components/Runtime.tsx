@@ -15,6 +15,7 @@ import { useEnvStore } from '@/stores/env';
 import { listOfficialTemplateRepository, listTemplate } from '@/api/template';
 import { useDevboxStore } from '@/stores/devbox';
 import { DevboxEditTypeV2 } from '@/types/devbox';
+import { getRuntimeTemplateConfig, getTemplateDefaults } from '@/utils/templateConfig';
 
 import {
   Select,
@@ -68,8 +69,11 @@ export default function Runtime({ isEdit = false }: RuntimeProps) {
   const afterUpdateTemplate = useCallback(
     (uid: string) => {
       const template = templateList.find((v) => v.uid === uid)!;
-      setValue('templateConfig', template.config as string);
+      const templateDefaults = getTemplateDefaults(template.config);
+      setValue('templateConfig', getRuntimeTemplateConfig(template.config));
       setValue('image', template.image);
+      setValue('envs', templateDefaults.envs || []);
+      setValue('configMaps', templateDefaults.configMaps || []);
     },
     [templateList, setValue]
   );
@@ -238,7 +242,7 @@ export default function Runtime({ isEdit = false }: RuntimeProps) {
               </SelectGroup>
             </SelectContent>
           </Select>
-          <div className="h-4 w-0.25 bg-zinc-200" />
+          <div className="h-4 w-px bg-zinc-200" />
           <Button
             variant="ghost"
             size="lg"
