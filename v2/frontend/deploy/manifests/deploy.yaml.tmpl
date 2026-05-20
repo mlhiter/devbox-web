@@ -79,6 +79,10 @@ spec:
               value: wildcard-cert
             - name: REGISTRY_ADDR
               value: {{ .registryAddr }}
+            - name: REGISTRY_USER
+              value: {{ default "" .registryUser }}
+            - name: REGISTRY_PASSWORD
+              value: {{ default "" .registryPassword }}
             - name: DEVBOX_AFFINITY_ENABLE
               value: 'true'
             - name: METRICS_URL
@@ -95,8 +99,6 @@ spec:
               value: 'false'
             - name: STORAGE_LIMIT
               value: 10Gi # default is 10Gi
-            - name: RETAG_SVC_URL
-              value: http://devbox-service.devbox-system.svc.cluster.local:8092
             - name: JWT_SECRET
               value: {{ .jwtSecret }} # -nsealos cm desktop-frontend-config ->jwt->Internal
             - name: REGION_UID
