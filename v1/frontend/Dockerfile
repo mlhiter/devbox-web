@@ -60,8 +60,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Next standalone includes prisma schemas/clients but not migrations.
 # Keep both providers' migrations for initContainer migrate deploy.
-COPY --from=builder --chown=nextjs:nodejs /app/prisma/cockroach/migrations ./providers/devbox/prisma/cockroach/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/prisma/postgresql/migrations ./providers/devbox/prisma/postgresql/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/cockroach/schema.prisma ./prisma/cockroach/schema.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/cockroach/migrations ./prisma/cockroach/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/postgresql/schema.prisma ./prisma/postgresql/schema.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/postgresql/migrations ./prisma/postgresql/migrations
 
 USER nextjs
 

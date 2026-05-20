@@ -48,7 +48,7 @@ spec:
           - -c
           args:
           - |-
-            cd /app/providers/devbox
+            cd /app
             DB_PROVIDER="${DATABASE_PROVIDER:-cockroachdb}"
             SCHEMA_PATH="./prisma/cockroach/schema.prisma"
             if [ "$DB_PROVIDER" = "postgresql" ] || [ "$DB_PROVIDER" = "postgres" ] || [ "$DB_PROVIDER" = "pg" ]; then
@@ -88,6 +88,12 @@ spec:
               value: wildcard-cert
             - name: REGISTRY_ADDR
               value: {{ .registryAddr }}
+            - name: REGISTRY_USER
+              value: {{ default "" .registryUser }}
+            - name: REGISTRY_PASSWORD
+              value: {{ default "" .registryPassword }}
+            - name: REGISTRY_INSECURE
+              value: "{{ default "false" .registryInsecure }}"
             - name: DEVBOX_AFFINITY_ENABLE
               value: 'true'
             - name: MONITOR_URL
@@ -106,8 +112,6 @@ spec:
               value: 'false'
             - name: PRIVACY_URL
               value: https://sealos.run/docs/msa/privacy-policy
-            - name: RETAG_SVC_URL
-              value: http://devbox-service.devbox-system.svc.cluster.local:8092
             - name: JWT_SECRET
               value: {{ .jwtSecret }} # -nsealos cm desktop-frontend-config ->jwt->Internal
             - name: REGION_UID

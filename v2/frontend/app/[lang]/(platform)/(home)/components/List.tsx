@@ -293,8 +293,8 @@ const DevboxList = ({
   return (
     <>
       {/* table */}
-      <div className="flex h-full w-full flex-col justify-between">
-        <div className="flex h-full flex-col gap-3 overflow-x-auto">
+      <div className="flex min-h-0 w-full flex-1 flex-col justify-between gap-3">
+        <div className="flex flex-col gap-3 overflow-x-auto">
           {/* table header */}
           <div className="flex h-10 min-w-[1350px] items-center rounded-lg border-[0.5px] bg-white px-6 py-1 text-sm/5 text-zinc-500 shadow-[0px_2px_8px_-2px_rgba(0,0,0,0.08)]">
             {table.getFlatHeaders().map((header) => (

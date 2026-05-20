@@ -1,16 +1,21 @@
 # Devbox Frontend Provider
 
-Devbox is the Sealos frontend provider for creating, editing, releasing, and
-operating DevBox development environments. It is a Next.js app inside the
-Sealos frontend workspace.
+Devbox v1 frontend is the Next.js app for creating, editing, releasing, and
+operating DevBox development environments. This copy lives in the standalone
+`labring/devbox` repository under `v1/frontend`.
 
 ## How to dev
 
-1. First,you should refer to `frontend/README.md` ’s `How to dev` part.
+1. Install dependencies and start from this directory:
+
+   ```bash
+   cd /Users/mlhiter/labring/devbox/v1/frontend
+   pnpm install
+   ```
 
 2. Then you should config your env.
 
-   1. Create a new file `.env.local` in `frontend/providers/devbox`.
+   1. Create a new file `.env.local` in `v1/frontend`.
 
       > `SEALOS_DOMAIN` is anyone website you use in sealos.
 

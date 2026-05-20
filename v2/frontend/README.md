@@ -6,11 +6,16 @@
 
 ## How to dev
 
-1. First,you should refer to `frontend/README.md` ’s `How to dev` part.
+1. Install dependencies and start from this directory:
+
+   ```bash
+   cd /Users/mlhiter/labring/devbox/v2/frontend
+   pnpm install
+   ```
 
 2. Then you should config your env.
 
-   1. Create a new file `.env.local` in frontend/providers/kubepanel directory.
+   1. Create a new file `.env.local` in `v2/frontend`.
 
       > `SEALOS_DOMAIN` is anyone website you use in sealos.
 
