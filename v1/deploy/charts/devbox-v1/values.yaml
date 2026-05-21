@@ -65,7 +65,6 @@ frontend:
     gpuEnable: "false"
     squashEnable: "false"
     devboxAffinityEnable: "true"
-    registryInsecure: "true"
     enableImportFeature: "false"
     enableWebideFeature: "false"
     enabledIDEs: ""

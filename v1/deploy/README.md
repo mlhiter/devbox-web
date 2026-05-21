@@ -29,9 +29,10 @@ When it does not exist yet, it is initialized from:
 
 This user values file keeps frequently changed settings such as resource sizing,
 controller matchers, frontend feature flags, `platform.databaseProvider`,
-`frontend.env.registryInsecure`, and `frontend.env.enabledIDEs`. Cluster-derived
-settings such as domain, registry credentials, database URL, JWT secret, region
-UID, and TLS verification are injected by `install.sh`.
+and `frontend.env.enabledIDEs`. Cluster-derived settings such as domain,
+registry credentials, database URL, JWT secret, region UID, and TLS verification
+are injected by `install.sh`. Frontend registry retagging uses HTTPS and does
+not read `frontend.env.registryInsecure`.
 
 ## Install Behavior
 

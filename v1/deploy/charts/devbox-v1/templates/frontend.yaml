@@ -86,8 +86,6 @@ spec:
           value: {{ .Values.registry.user | quote }}
         - name: REGISTRY_PASSWORD
           value: {{ .Values.registry.password | quote }}
-        - name: REGISTRY_INSECURE
-          value: {{ .Values.frontend.env.registryInsecure | quote }}
         - name: DEVBOX_AFFINITY_ENABLE
           value: {{ .Values.frontend.env.devboxAffinityEnable | quote }}
         - name: MONITOR_URL
