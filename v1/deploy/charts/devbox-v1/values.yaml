@@ -61,14 +61,24 @@ frontend:
     privacyUrlEn: https://sealos.io/docs/msa/privacy-policy
     monitorUrl: http://launchpad-monitor.sealos.svc.cluster.local:8428
     accountUrl: http://account-service.account-system.svc.cluster.local:2333
-    currencySymbol: usd
-    gpuEnable: "false"
+    currencySymbol: shellCoin
+    gpuEnable: "true"
     squashEnable: "false"
     devboxAffinityEnable: "true"
-    registryInsecure: "true"
-    enableImportFeature: "false"
-    enableWebideFeature: "false"
+    enableImportFeature: "true"
+    enableWebideFeature: "true"
     enabledIDEs: ""
+    enableAdvancedEnvAndConfigmap: "true"
+    enableAdvancedNfs: "true"
+    enableAdvancedSharedMemory: "true"
+    cpuSlideMarkList: "2,4,8,16,32"
+    memorySlideMarkList: "4,8,16,32,64"
+    storageDefault: "20"
+    domainChallengeSecret: ""
+    nfsStorageClassName: "nfs-csi"
+    nfsMaxSize: "1000"
+    webidePort: "9999"
+    customScripts: ""
   config:
     addr: ":3000"
 

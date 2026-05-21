@@ -20,6 +20,9 @@ under `app/api`.
   build arguments here.
 - The deployment has both `devbox-frontend-init` and `devbox-frontend`
   containers. Inspect both image tags when verifying a rollout.
+- Frontend-side template image retagging is HTTPS-only. Do not reintroduce
+  `REGISTRY_INSECURE` or `registryInsecure`; configure `REGISTRY_ADDR` as an
+  HTTPS-capable registry host.
 - Use the Codex in-app Browser for local browser verification.
 
 ## Verification

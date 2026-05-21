@@ -8,9 +8,8 @@ COPY manifests manifests
 ENV cloudDomain="127.0.0.1.nip.io"
 ENV cloudPort=""
 ENV certSecretName="wildcard-cert"
-ENV registryAddr="sealos.hub:5000"
+ENV registryAddr="hub.dev.sealos.plus"
 ENV registryUser=""
 ENV registryPassword=""
-ENV registryInsecure="true"
 
 CMD ["kubectl apply -f manifests"]

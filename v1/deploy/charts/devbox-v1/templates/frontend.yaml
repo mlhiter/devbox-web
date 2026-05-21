@@ -86,8 +86,6 @@ spec:
           value: {{ .Values.registry.user | quote }}
         - name: REGISTRY_PASSWORD
           value: {{ .Values.registry.password | quote }}
-        - name: REGISTRY_INSECURE
-          value: {{ .Values.frontend.env.registryInsecure | quote }}
         - name: DEVBOX_AFFINITY_ENABLE
           value: {{ .Values.frontend.env.devboxAffinityEnable | quote }}
         - name: MONITOR_URL
@@ -106,8 +104,6 @@ spec:
           value: {{ .Values.frontend.env.gpuEnable | quote }}
         - name: PRIVACY_URL
           value: {{ .Values.frontend.env.privacyUrlZh | quote }}
-        - name: RETAG_SVC_URL
-          value: {{ printf "http://devbox-service.%s.svc.cluster.local:8092" .Values.controller.namespace | quote }}
         - name: JWT_SECRET
           value: {{ .Values.platform.jwtSecret | quote }}
         - name: REGION_UID
@@ -122,6 +118,50 @@ spec:
           value: {{ .Values.frontend.env.enableWebideFeature | quote }}
         - name: ENABLED_IDES
           value: {{ .Values.frontend.env.enabledIDEs | quote }}
+        {{- with .Values.frontend.env.enableAdvancedEnvAndConfigmap }}
+        - name: ENABLE_ADVANCED_ENV_AND_CONFIGMAP
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.enableAdvancedNfs }}
+        - name: ENABLE_ADVANCED_NFS
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.enableAdvancedSharedMemory }}
+        - name: ENABLE_ADVANCED_SHARED_MEMORY
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.cpuSlideMarkList }}
+        - name: CPU_SLIDE_MARK_LIST
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.memorySlideMarkList }}
+        - name: MEMORY_SLIDE_MARK_LIST
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.storageDefault }}
+        - name: STORAGE_DEFAULT
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.domainChallengeSecret }}
+        - name: DEVBOX_DOMAIN_CHALLENGE_SECRET
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.nfsStorageClassName }}
+        - name: NFS_STORAGE_CLASS_NAME
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.nfsMaxSize }}
+        - name: NFS_MAX_SIZE
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.webidePort }}
+        - name: WEBIDE_PORT
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.customScripts }}
+        - name: CUSTOM_SCRIPTS
+          value: {{ . | quote }}
+        {{- end }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1001

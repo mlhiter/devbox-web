@@ -16,7 +16,6 @@ NEXT_PUBLIC_MOCK_USER='<kubeconfig JSON string>'
 SEALOS_DOMAIN='192.168.10.70.nip.io'
 INGRESS_DOMAIN='192.168.10.70.nip.io'
 REGISTRY_ADDR='hub.192.168.10.70.nip.io'
-REGISTRY_INSECURE='true'
 JWT_SECRET='<desktop jwt secret>'
 REGION_UID='<region uid>'
 DATABASE_URL='<template database url>'
@@ -25,9 +24,9 @@ DATABASE_PROVIDER='cockroachdb'
 
 Do not commit real `.env.*.local` secrets.
 
-`REGISTRY_ADDR` defaults to HTTPS for backend retag requests. Set
-`REGISTRY_INSECURE='true'` only when developing against an internal HTTP
-registry.
+`REGISTRY_ADDR` is used over HTTPS for backend retag requests. It may be set as
+`hub.example.com`; the frontend server adds `https://` when no scheme is
+provided. Explicit `http://` registry endpoints are rejected.
 
 ## Commands
 

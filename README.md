@@ -51,6 +51,7 @@ Frontend runs on `http://localhost:3000` by default.
 > [!IMPORTANT]
 > Before running features that require cluster access, configure `.env.local` with at least:
 > `NEXT_PUBLIC_MOCK_USER`, `SEALOS_DOMAIN`, and related backend endpoints (`DATABASE_URL`, `METRICS_URL`, `ACCOUNT_URL`), plus registry retag settings (`REGISTRY_ADDR`, `REGISTRY_USER`, `REGISTRY_PASSWORD`) based on your environment.
+> Frontend registry retag requests require HTTPS; `REGISTRY_ADDR` may omit the scheme, but HTTP registry endpoints are not supported.
 
 ### 2. Run controller
 

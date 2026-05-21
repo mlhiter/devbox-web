@@ -3,6 +3,9 @@
 - Frontend dependencies are installed from npm registry.
 - Use published `@labring/*` packages directly (for example `@labring/sealos-ui`, `@labring/sealos-driver-sdk`, `@labring/sealos-desktop-sdk`).
 - Do not use `yalc link` / `yalc remove` in this repo.
+- Frontend-side template image retagging requires HTTPS. Configure
+  `REGISTRY_ADDR`, `REGISTRY_USER`, and `REGISTRY_PASSWORD`; do not use
+  `REGISTRY_INSECURE` or HTTP registry endpoints.
 
 ## How to dev
 
