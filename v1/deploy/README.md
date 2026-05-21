@@ -34,6 +34,13 @@ registry credentials, database URL, JWT secret, region UID, and TLS verification
 are injected by `install.sh`. Frontend registry retagging uses HTTPS and does
 not read `frontend.env.registryInsecure`.
 
+Only platform values that can be derived from Sealos ConfigMaps or installer
+environment variables are injected automatically by `install.sh`. Optional
+frontend deployment settings such as advanced config toggles, CPU/memory slider
+marks, storage defaults, NFS storage class, WebIDE port, domain challenge secret,
+and custom scripts are left empty by default and are rendered only when set in
+the user values file or global values.
+
 ## Install Behavior
 
 - Devbox runtime resources are deployed into `devbox-system`.
