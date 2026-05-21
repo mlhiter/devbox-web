@@ -1,0 +1,199 @@
+name: PR Images
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-images-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  LOCAL_REGISTRY: 127.0.0.1:5000/devbox-pr
+  LOCAL_SEALOS_IMAGE: devbox-v1-cluster-pr
+
+jobs:
+  v1-runtime-images:
+    name: Build / v1-runtime / ${{ matrix.name }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: controller
+            image_name: devbox-v1-controller
+            dockerfile: v1/controller/Dockerfile
+            context: v1/controller
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: controller
+            image_name: devbox-v1-controller
+            dockerfile: v1/controller/Dockerfile
+            context: v1/controller
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - name: frontend
+            image_name: devbox-v1-frontend
+            dockerfile: v1/frontend/Dockerfile
+            context: v1/frontend
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: frontend
+            image_name: devbox-v1-frontend
+            dockerfile: v1/frontend/Dockerfile
+            context: v1/frontend
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - name: cri-shim-patch
+            image_name: devbox-v1-cri-shim-patch
+            dockerfile: v1/cri-shim/patch/Dockerfile
+            context: v1/cri-shim
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: cri-shim-patch
+            image_name: devbox-v1-cri-shim-patch
+            dockerfile: v1/cri-shim/patch/Dockerfile
+            context: v1/cri-shim
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)"
+          PR_TAG="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
+          echo "pr_tag=${PR_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          tags: ${{ matrix.image_name }}:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.pr_tag }}
+            org.opencontainers.image.architecture=${{ matrix.arch }}
+            runnumber=${{ github.run_id }}
+          cache-from: type=gha,scope=pr-${{ matrix.image_name }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-${{ matrix.image_name }}-${{ matrix.arch }}
+
+  v1-cluster-image:
+    name: Build / v1-cluster / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    needs:
+      - v1-runtime-images
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)"
+          PR_TAG="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
+          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "pr_tag=${PR_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build controller image
+        uses: docker/build-push-action@v6
+        with:
+          context: v1/controller
+          file: v1/controller/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v1-controller:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v1-controller-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v1-controller-${{ matrix.arch }}
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: v1/frontend
+          file: v1/frontend/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v1-frontend:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v1-frontend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v1-frontend-${{ matrix.arch }}
+
+      - name: Start temporary local registry
+        run: |
+          set -euo pipefail
+          docker rm -f devbox-pr-registry >/dev/null 2>&1 || true
+          docker run -d -p 5000:5000 --name devbox-pr-registry registry:2
+
+      - name: Push runtime images to temporary local registry
+        run: |
+          set -euo pipefail
+          PR_TAG="${{ steps.meta.outputs.pr_tag }}"
+          docker tag "devbox-v1-controller:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v1-controller:${PR_TAG}"
+          docker tag "devbox-v1-frontend:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v1-frontend:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v1-controller:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v1-frontend:${PR_TAG}"
+
+      - name: Install sealos
+        run: sudo bash ./.github/scripts/install-sealos.sh
+
+      - name: Validate chart and cache images for sealos
+        working-directory: v1/deploy
+        run: |
+          set -euo pipefail
+          PR_TAG="${{ steps.meta.outputs.pr_tag }}"
+          ./scripts/sync-crds.sh
+          for values_file in charts/devbox-v1/values.yaml charts/devbox-v1/devbox-v1-values.yaml; do
+            sed -i "/^controller:/,/^frontend:/ s#^\([[:space:]]*repository:[[:space:]]*\).*#\1${LOCAL_REGISTRY}/devbox-v1-controller#" "${values_file}"
+            sed -i "/^controller:/,/^frontend:/ s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${PR_TAG}#" "${values_file}"
+            sed -i "/^frontend:/,/^ingress:/ s#^\([[:space:]]*repository:[[:space:]]*\).*#\1${LOCAL_REGISTRY}/devbox-v1-frontend#" "${values_file}"
+            sed -i "/^frontend:/,/^ingress:/ s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${PR_TAG}#" "${values_file}"
+          done
+          helm lint charts/devbox-v1
+          helm template devbox-v1 charts/devbox-v1 --include-crds >/tmp/devbox-v1-rendered.yaml
+          sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
+
+      - name: Build cluster image
+        uses: docker/build-push-action@v6
+        with:
+          context: v1/deploy
+          file: v1/deploy/Kubefile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: ${{ env.LOCAL_SEALOS_IMAGE }}:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v1-cluster-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v1-cluster-${{ matrix.arch }}
+      - name: Cleanup temporary local registry
+        if: always()
+        run: docker rm -f devbox-pr-registry >/dev/null 2>&1 || true
