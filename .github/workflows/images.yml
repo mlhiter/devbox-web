@@ -15,7 +15,7 @@ env:
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
-  build-and-push:
+  v1-images:
     name: Build / ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
@@ -27,35 +27,10 @@ jobs:
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             platforms: linux/amd64,linux/arm64
-          - name: v2-controller
-            image_name: devbox-v2-controller
-            dockerfile: v2/controller/Dockerfile
-            context: v2/controller
-            platforms: linux/amd64,linux/arm64
           - name: v1-frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
-            platforms: linux/amd64,linux/arm64
-          - name: v2-frontend
-            image_name: devbox-v2-frontend
-            dockerfile: v2/frontend/Dockerfile
-            context: v2/frontend
-            platforms: linux/amd64,linux/arm64
-          - name: v2-server
-            image_name: devbox-v2-server
-            dockerfile: v2/server/Dockerfile
-            context: v2/server
-            platforms: linux/amd64,linux/arm64
-          - name: v2-httpgate
-            image_name: devbox-v2-httpgate
-            dockerfile: v2/httpgate/Dockerfile
-            context: v2/httpgate
-            platforms: linux/amd64,linux/arm64
-          - name: v2-sshgate
-            image_name: devbox-v2-sshgate
-            dockerfile: v2/sshgate/Dockerfile
-            context: v2/sshgate
             platforms: linux/amd64,linux/arm64
           - name: v1-cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
@@ -101,11 +76,82 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
+  v2-images:
+    name: Build / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: v2-controller
+            image_name: devbox-v2-controller
+            dockerfile: v2/controller/Dockerfile
+            context: v2/controller
+            platforms: linux/amd64,linux/arm64
+          - name: v2-frontend
+            image_name: devbox-v2-frontend
+            dockerfile: v2/frontend/Dockerfile
+            context: v2/frontend
+            platforms: linux/amd64,linux/arm64
+          - name: v2-server
+            image_name: devbox-v2-server
+            dockerfile: v2/server/Dockerfile
+            context: v2/server
+            platforms: linux/amd64,linux/arm64
+          - name: v2-httpgate
+            image_name: devbox-v2-httpgate
+            dockerfile: v2/httpgate/Dockerfile
+            context: v2/httpgate
+            platforms: linux/amd64,linux/arm64
+          - name: v2-sshgate
+            image_name: devbox-v2-sshgate
+            dockerfile: v2/sshgate/Dockerfile
+            context: v2/sshgate
+            platforms: linux/amd64,linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
   v1-cluster-image:
     name: Build / v1-cluster-image / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     needs:
-      - build-and-push
+      - v1-images
     strategy:
       fail-fast: false
       matrix:
@@ -253,7 +299,7 @@ jobs:
     if: github.ref_name == 'main'
     runs-on: ${{ matrix.runner }}
     needs:
-      - build-and-push
+      - v1-images
     strategy:
       fail-fast: false
       matrix:

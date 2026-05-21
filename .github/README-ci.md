@@ -17,6 +17,9 @@ This repository publishes CI artifacts and container images from `github.com/sea
   - `ghcr.io/sealos-apps/devbox-v2-server`
   - `ghcr.io/sealos-apps/devbox-v2-httpgate`
   - `ghcr.io/sealos-apps/devbox-v2-sshgate`
+  The workflow keeps v1 and v2 image build jobs separate. `devbox-v1-cluster`
+  and v1 patch OSS packaging depend only on the v1 image job, so unrelated v2
+  image failures do not block v1 cluster image publication.
   On `main`, it also uploads offline image packages for `devbox-v1-cluster` and `devbox-v1-cri-shim-patch` to OSS.
 - `Release`
   Triggers on `v*` tags, creates a GitHub Release, and uploads generated controller manifests plus `v1-cri-shim`, `v2-server`, `v2-httpgate`, and `v2-sshgate` release artifacts.
