@@ -93,8 +93,13 @@ Default image names now follow the new repository naming:
 
 - `ghcr.io/sealos-apps/devbox-v1-controller:latest`
 - `ghcr.io/sealos-apps/devbox-v1-frontend:latest`
+- `ghcr.io/sealos-apps/devbox-v1-cluster:latest`
+- `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:latest`
 - `ghcr.io/sealos-apps/devbox-v2-controller:latest`
 - `ghcr.io/sealos-apps/devbox-v2-frontend:latest`
+- `ghcr.io/sealos-apps/devbox-v2-server:latest`
+- `ghcr.io/sealos-apps/devbox-v2-httpgate:latest`
+- `ghcr.io/sealos-apps/devbox-v2-sshgate:latest`
 
 You can override these at build or deploy time with `IMG=...` for controllers and `IMG=...` for frontends.
 
@@ -103,20 +108,30 @@ You can override these at build or deploy time with `IMG=...` for controllers an
 GitHub Actions workflows live under [`.github/workflows`](/Users/yy/archary/sealos-devbox/.github/workflows) and are split into three stages:
 
 - `CI`: validates `v1/v2` controllers and frontends on pull requests and pushes to `main`
-- `Images`: builds and pushes the four GHCR images on `main`, tags, or manual dispatch
-- `Release`: publishes a GitHub Release on `v*` tags and attaches generated controller manifests
+- `Images`: builds and pushes GHCR images on `main` or manual dispatch, and uploads `main` branch v1 offline image packages to OSS
+- `Release`: builds release images on `v*` tags, publishes a GitHub Release with manifests/binaries/charts, and uploads v1 offline image packages to OSS
 
 Tagging a release such as `v1.2.3` will publish:
 
 - `ghcr.io/sealos-apps/devbox-v1-controller:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v1-frontend:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v1-cluster:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-controller:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-frontend:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v2-server:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v2-httpgate:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v2-sshgate:v1.2.3`
 
 The release workflow also uploads controller manifest bundles generated from:
 
 - `v1/controller`
 - `v2/controller`
+
+Large offline image packages are not attached to GitHub Releases. They are uploaded to OSS instead:
+
+- `release/<tag>/devbox-v1-cluster-<tag>-<arch>.tar`
+- `release/<tag>/devbox-v1-cri-shim-patch-<tag>-<arch>.tar`
 
 If you need to publish manually, you can still run the local make targets:
 

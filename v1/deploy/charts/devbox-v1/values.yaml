@@ -1,0 +1,87 @@
+cloudDomain: "127.0.0.1.nip.io"
+cloudPort: ""
+certSecretName: "wildcard-cert"
+
+registry:
+  addr: "sealos.hub:5000"
+  user: "admin"
+  password: "passw0rd"
+
+platform:
+  databaseUrl: ""
+  databaseProvider: "cockroachdb"
+  jwtSecret: ""
+  regionUid: ""
+  tlsRejectUnauthorized: "1"
+
+controller:
+  enabled: true
+  namespace: devbox-system
+  replicas: 1
+  image:
+    repository: ghcr.io/sealos-apps/devbox-v1-controller
+    tag: latest
+    pullPolicy: Always
+  requestCpuRate: "20"
+  requestMemoryRate: "10"
+  matchers:
+    enablePodEphemeralStorageMatcher: false
+    enablePodAnnotationsMatcher: true
+    enablePodEnvMatcher: true
+    enablePodResourceMatcher: true
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  defaultUserRoleBinding:
+    enabled: true
+
+frontend:
+  enabled: true
+  namespace: devbox-system
+  replicas: 1
+  image:
+    repository: ghcr.io/sealos-apps/devbox-v1-frontend
+    tag: latest
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2048Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  env:
+    documentUrlZh: https://sealos.run/docs/overview/intro
+    documentUrlEn: https://sealos.io/docs/overview/intro
+    privacyUrlZh: https://sealos.run/docs/msa/privacy-policy
+    privacyUrlEn: https://sealos.io/docs/msa/privacy-policy
+    monitorUrl: http://launchpad-monitor.sealos.svc.cluster.local:8428
+    accountUrl: http://account-service.account-system.svc.cluster.local:2333
+    currencySymbol: usd
+    gpuEnable: "false"
+    squashEnable: "false"
+    devboxAffinityEnable: "true"
+    registryInsecure: "true"
+    enableImportFeature: "false"
+    enableWebideFeature: "false"
+    enabledIDEs: ""
+  config:
+    addr: ":3000"
+
+ingress:
+  enabled: true
+  className: nginx
+  hostPrefix: devbox
+
+app:
+  enabled: true
+  namespace: app-system
+  name: devbox
+  displayType: normal
+  type: iframe
+
+extraManifests: []

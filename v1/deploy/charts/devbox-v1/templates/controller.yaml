@@ -1,0 +1,92 @@
+{{- if .Values.controller.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: devbox
+    control-plane: controller-manager
+  name: devbox-controller-manager-metrics-service
+  namespace: {{ .Values.controller.namespace | quote }}
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: devbox
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: devbox
+    control-plane: controller-manager
+  name: devbox-controller-manager
+  namespace: {{ .Values.controller.namespace | quote }}
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devbox
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: devbox
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-bind-address=:8443
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        - --request-cpu-rate={{ .Values.controller.requestCpuRate }}
+        - --request-memory-rate={{ .Values.controller.requestMemoryRate }}
+        - --enable-pod-ephemeral-storage-matcher={{ .Values.controller.matchers.enablePodEphemeralStorageMatcher }}
+        - --enable-pod-expected-annotations-matcher={{ .Values.controller.matchers.enablePodAnnotationsMatcher }}
+        - --enable-pod-env-matcher={{ .Values.controller.matchers.enablePodEnvMatcher }}
+        - --enable-pod-extra-resource-matcher={{ .Values.controller.matchers.enablePodResourceMatcher }}
+        - --registry-addr={{ .Values.registry.addr }}
+        - --registry-user={{ .Values.registry.user }}
+        - --registry-password={{ .Values.registry.password }}
+        command:
+        - /manager
+        image: {{ include "devbox-v1.controllerImage" . | quote }}
+        imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports: []
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.controller.resources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts: []
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: devbox-controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes: []
+{{- end }}

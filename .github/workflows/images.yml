@@ -57,6 +57,11 @@ jobs:
             dockerfile: v2/sshgate/Dockerfile
             context: v2/sshgate
             platforms: linux/amd64,linux/arm64
+          - name: v1-cri-shim-patch
+            image_name: devbox-v1-cri-shim-patch
+            dockerfile: v1/cri-shim/patch/Dockerfile
+            context: v1/cri-shim
+            platforms: linux/amd64,linux/arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -95,3 +100,213 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  v1-cluster-image:
+    name: Build / v1-cluster-image / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    needs:
+      - build-and-push
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install sealos
+        run: sudo bash ./.github/scripts/install-sealos.sh
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache images for sealos
+        working-directory: v1/deploy
+        run: |
+          set -euo pipefail
+          sudo sealos login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
+          ./scripts/sync-crds.sh
+          for values_file in charts/devbox-v1/values.yaml charts/devbox-v1/devbox-v1-values.yaml; do
+            sed -i "/^controller:/,/^frontend:/ s#^\([[:space:]]*repository:[[:space:]]*\).*#\1${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-controller#" "${values_file}"
+            sed -i "/^controller:/,/^frontend:/ s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${GITHUB_REF_NAME}#" "${values_file}"
+            sed -i "/^frontend:/,/^ingress:/ s#^\([[:space:]]*repository:[[:space:]]*\).*#\1${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-frontend#" "${values_file}"
+            sed -i "/^frontend:/,/^ingress:/ s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${GITHUB_REF_NAME}#" "${values_file}"
+          done
+          sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/devbox-v1-cluster
+          tags: |
+            type=ref,event=branch,suffix=-${{ matrix.arch }}
+            type=sha,prefix=sha-,suffix=-${{ matrix.arch }}
+            type=raw,value=latest-${{ matrix.arch }},enable=${{ github.ref_name == 'main' }}
+
+      - name: Build and push cluster image
+        uses: docker/build-push-action@v6
+        with:
+          context: v1/deploy
+          file: v1/deploy/Kubefile
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=v1-cluster-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=v1-cluster-${{ matrix.arch }}
+
+      - name: Save cluster image package
+        if: github.ref_name == 'main'
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          SOURCE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}-${{ matrix.arch }}"
+          PACKAGE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:main-${SHORT_SHA}-${{ matrix.arch }}"
+          docker pull "${SOURCE_IMAGE}"
+          docker tag "${SOURCE_IMAGE}" "${PACKAGE_IMAGE}"
+          mkdir -p release-assets
+          docker save "${PACKAGE_IMAGE}" | gzip > "release-assets/devbox-v1-cluster-main-${SHORT_SHA}-${{ matrix.arch }}.tar.gz"
+
+      - name: Install OSS tools
+        if: github.ref_name == 'main'
+        run: |
+          set -euo pipefail
+          sudo -v
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+      - name: Upload cluster image package to OSS
+        if: github.ref_name == 'main'
+        env:
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+        run: |
+          set -euo pipefail
+          : "${OSS_ENDPOINT:?OSS_ENDPOINT is required}"
+          : "${OSS_ACCESS_KEY_ID:?OSS_ACCESS_KEY_ID is required}"
+          : "${OSS_ACCESS_KEY_SECRET:?OSS_ACCESS_KEY_SECRET is required}"
+          : "${OSS_BUCKET:?OSS_BUCKET is required}"
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          TAR_NAME="release-assets/devbox-v1-cluster-main-${SHORT_SHA}-${{ matrix.arch }}.tar.gz"
+          md5sum "${TAR_NAME}" > "${TAR_NAME}.md5"
+          OSS_PREFIX="ci/main/${SHORT_SHA}"
+          OSS_TAR_NAME="devbox-v1-cluster-main-${SHORT_SHA}-${{ matrix.arch }}.tar"
+          ossutil64 cp -f -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" \
+            "${TAR_NAME}" \
+            "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}"
+          ossutil64 cp -f -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" \
+            "${TAR_NAME}.md5" \
+            "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}.md5"
+
+  v1-cluster-manifest:
+    name: Publish / v1-cluster-image manifest
+    runs-on: ubuntu-latest
+    needs:
+      - v1-cluster-image
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifests
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}-amd64" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}-arm64"
+
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          docker buildx imagetools create \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}-amd64" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}-arm64"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker buildx imagetools create \
+              -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest" \
+              "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest-amd64" \
+              "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest-arm64"
+          fi
+
+  v1-cri-shim-patch-oss:
+    name: OSS / v1-cri-shim-patch / ${{ matrix.arch }}
+    if: github.ref_name == 'main'
+    runs-on: ${{ matrix.runner }}
+    needs:
+      - build-and-push
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save patch image package
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          SOURCE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cri-shim-patch:sha-${SHORT_SHA}"
+          PACKAGE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cri-shim-patch:main-${SHORT_SHA}-${{ matrix.arch }}"
+          docker pull --platform "linux/${{ matrix.arch }}" "${SOURCE_IMAGE}"
+          docker tag "${SOURCE_IMAGE}" "${PACKAGE_IMAGE}"
+          mkdir -p release-assets
+          docker save "${PACKAGE_IMAGE}" | gzip > "release-assets/devbox-v1-cri-shim-patch-main-${SHORT_SHA}-${{ matrix.arch }}.tar.gz"
+
+      - name: Install OSS tools
+        run: |
+          set -euo pipefail
+          sudo -v
+          curl -fsSL https://gosspublic.alicdn.com/ossutil/install.sh | sudo bash
+
+      - name: Upload patch image package to OSS
+        env:
+          OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_BUCKET: ${{ vars.OSS_BUCKET }}
+        run: |
+          set -euo pipefail
+          : "${OSS_ENDPOINT:?OSS_ENDPOINT is required}"
+          : "${OSS_ACCESS_KEY_ID:?OSS_ACCESS_KEY_ID is required}"
+          : "${OSS_ACCESS_KEY_SECRET:?OSS_ACCESS_KEY_SECRET is required}"
+          : "${OSS_BUCKET:?OSS_BUCKET is required}"
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          TAR_NAME="release-assets/devbox-v1-cri-shim-patch-main-${SHORT_SHA}-${{ matrix.arch }}.tar.gz"
+          md5sum "${TAR_NAME}" > "${TAR_NAME}.md5"
+          OSS_PREFIX="ci/main/${SHORT_SHA}"
+          OSS_TAR_NAME="devbox-v1-cri-shim-patch-main-${SHORT_SHA}-${{ matrix.arch }}.tar"
+          ossutil64 cp -f -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" \
+            "${TAR_NAME}" \
+            "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}"
+          ossutil64 cp -f -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" \
+            "${TAR_NAME}.md5" \
+            "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}.md5"

@@ -1,0 +1,53 @@
+{{- if and .Values.frontend.enabled .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_clear_headers "X-Frame-Options:";
+      more_set_headers "Content-Security-Policy: default-src * blob: data: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}; img-src * data: blob: resource: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}; connect-src * wss: blob: resource:; style-src 'self' 'unsafe-inline' blob: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} resource:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} resource: *.baidu.com *.bdstatic.com; frame-src 'self' {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} mailto: tel: weixin: mtt: *.baidu.com; frame-ancestors 'self' https://{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} https://*.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}";
+      more_set_headers "X-Xss-Protection: 1; mode=block";
+    higress.io/response-header-control-remove: X-Frame-Options
+    higress.io/response-header-control-update: |
+      Content-Security-Policy "default-src * blob: data: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}; img-src * data: blob: resource: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}; connect-src * wss: blob: resource:; style-src 'self' 'unsafe-inline' blob: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} resource:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: *.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} resource: *.baidu.com *.bdstatic.com; frame-src 'self' {{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} mailto: tel: weixin: mtt: *.baidu.com; frame-ancestors 'self' https://{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }} https://*.{{ .Values.cloudDomain }}{{ if .Values.cloudPort }}:{{ .Values.cloudPort }}{{ end }}"
+      X-Xss-Protection "1; mode=block"
+  name: devbox-frontend
+  namespace: {{ .Values.frontend.namespace | quote }}
+spec:
+  rules:
+  - host: {{ include "devbox-v1.frontendHost" . | quote }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: devbox-frontend
+            port:
+              number: 3000
+  tls:
+  - hosts:
+    - {{ include "devbox-v1.frontendHost" . | quote }}
+    secretName: {{ .Values.certSecretName | quote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+  name: devbox-challenge
+  namespace: {{ .Values.frontend.namespace | quote }}
+spec:
+  rules:
+  - host: ""
+    http:
+      paths:
+      - backend:
+          service:
+            name: devbox-frontend
+            port:
+              number: 3000
+        path: /api/.well-known/devbox-domain-challenge
+        pathType: Prefix
+{{- end }}

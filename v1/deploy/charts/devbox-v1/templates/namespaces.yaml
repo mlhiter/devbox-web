@@ -1,0 +1,17 @@
+{{- $namespaces := dict -}}
+{{- if .Values.controller.enabled }}
+{{- $_ := set $namespaces .Values.controller.namespace true -}}
+{{- end }}
+{{- if .Values.frontend.enabled }}
+{{- $_ := set $namespaces .Values.frontend.namespace true -}}
+{{- end }}
+{{- range $namespace, $_ := $namespaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: devbox
+  name: {{ $namespace | quote }}
+{{- end }}
