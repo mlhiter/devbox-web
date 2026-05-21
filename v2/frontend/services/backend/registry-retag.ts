@@ -58,9 +58,6 @@ class RegistryRetagError extends Error {
 const normalizeRegistry = (registry: string) =>
   registry.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 
-const isTruthyEnv = (value?: string) =>
-  ['1', 'true', 'yes', 'on'].includes(value?.toLowerCase() ?? '');
-
 const parseImageRef = (image: string): ImageRef => {
   const raw = image.trim();
   const schemeMatch = raw.match(/^(https?:\/\/)(.+)$/);
@@ -115,12 +112,15 @@ const getRegistryCredentials = (): RegistryCredentials => {
 const registryBaseUrl = (registry: string) => {
   const trimmed = registry.trim().replace(/\/+$/, '');
 
-  if (/^https?:\/\//.test(trimmed)) {
+  if (/^http:\/\//.test(trimmed)) {
+    throw new RegistryRetagError('Registry HTTP endpoints are not supported');
+  }
+
+  if (/^https:\/\//.test(trimmed)) {
     return trimmed;
   }
 
-  const scheme = isTruthyEnv(process.env.REGISTRY_INSECURE) ? 'http' : 'https';
-  return `${scheme}://${normalizeRegistry(trimmed)}`;
+  return `https://${normalizeRegistry(trimmed)}`;
 };
 
 const authHeader = ({ username, password }: RegistryCredentials) =>
