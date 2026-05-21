@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache \
@@ -13,16 +15,16 @@ ENV CGO_ENABLED=0 \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH
 
-COPY server/go.mod server/go.sum ./server/
-COPY controller/go.mod controller/go.sum ./controller/
+COPY go.mod go.sum ./server/
+COPY --from=controller go.mod go.sum ./controller/
 
 WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 WORKDIR /src
-COPY server ./server
-COPY controller ./controller
+COPY . ./server
+COPY --from=controller . ./controller
 
 WORKDIR /src/server
 RUN --mount=type=cache,target=/go/pkg/mod \

@@ -13,11 +13,13 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
+  DOCKER_BUILDKIT: "1"
+  DOCKER_CLI_EXPERIMENTAL: enabled
 
 jobs:
   v1-images:
-    name: Build / ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    name: Build / ${{ matrix.name }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -26,26 +28,41 @@ jobs:
             image_name: devbox-v1-controller
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v1-controller
+            image_name: devbox-v1-controller
+            dockerfile: v1/controller/Dockerfile
+            context: v1/controller
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v1-frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v1-frontend
+            image_name: devbox-v1-frontend
+            dockerfile: v1/frontend/Dockerfile
+            context: v1/frontend
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v1-cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
             dockerfile: v1/cri-shim/patch/Dockerfile
             context: v1/cri-shim
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v1-cri-shim-patch
+            image_name: devbox-v1-cri-shim-patch
+            dockerfile: v1/cri-shim/patch/Dockerfile
+            context: v1/cri-shim
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -54,31 +71,83 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
-
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
+          TAGS=(
+            "${IMAGE}:${GITHUB_REF_NAME}-${{ matrix.arch }}"
+            "${IMAGE}:sha-${SHORT_SHA}-${{ matrix.arch }}"
+          )
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            TAGS+=("${IMAGE}:latest-${{ matrix.arch }}")
+          fi
+
+          BUILD_ARGS=(
+            --platform "linux/${{ matrix.arch }}"
+            --file "${{ matrix.dockerfile }}"
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME}"
+            --label "org.opencontainers.image.architecture=${{ matrix.arch }}"
+            --label "runnumber=${GITHUB_RUN_ID}"
+          )
+          for tag in "${TAGS[@]}"; do
+            BUILD_ARGS+=(--tag "${tag}")
+          done
+
+          docker build "${BUILD_ARGS[@]}" "${{ matrix.context }}"
+          for tag in "${TAGS[@]}"; do
+            docker push "${tag}"
+          done
+
+  v1-image-manifests:
+    name: Publish / v1-image manifests / ${{ matrix.image_name }}
+    runs-on: ubuntu-latest
+    needs:
+      - v1-images
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: devbox-v1-controller
+          - image_name: devbox-v1-frontend
+          - image_name: devbox-v1-cri-shim-patch
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch image manifests
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
+
+          docker manifest create "${IMAGE}:${GITHUB_REF_NAME}" \
+            "${IMAGE}:${GITHUB_REF_NAME}-amd64" \
+            "${IMAGE}:${GITHUB_REF_NAME}-arm64"
+          docker manifest push "${IMAGE}:${GITHUB_REF_NAME}"
+
+          docker manifest create "${IMAGE}:sha-${SHORT_SHA}" \
+            "${IMAGE}:sha-${SHORT_SHA}-amd64" \
+            "${IMAGE}:sha-${SHORT_SHA}-arm64"
+          docker manifest push "${IMAGE}:sha-${SHORT_SHA}"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker manifest create "${IMAGE}:latest" \
+              "${IMAGE}:latest-amd64" \
+              "${IMAGE}:latest-arm64"
+            docker manifest push "${IMAGE}:latest"
+          fi
 
   v2-images:
-    name: Build / ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    name: Build / ${{ matrix.name }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -87,36 +156,69 @@ jobs:
             image_name: devbox-v2-controller
             dockerfile: v2/controller/Dockerfile
             context: v2/controller
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v2-controller
+            image_name: devbox-v2-controller
+            dockerfile: v2/controller/Dockerfile
+            context: v2/controller
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v2-frontend
             image_name: devbox-v2-frontend
             dockerfile: v2/frontend/Dockerfile
             context: v2/frontend
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v2-frontend
+            image_name: devbox-v2-frontend
+            dockerfile: v2/frontend/Dockerfile
+            context: v2/frontend
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v2-server
             image_name: devbox-v2-server
             dockerfile: v2/server/Dockerfile
             context: v2/server
-            platforms: linux/amd64,linux/arm64
+            build_contexts: |
+              controller=v2/controller
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v2-server
+            image_name: devbox-v2-server
+            dockerfile: v2/server/Dockerfile
+            context: v2/server
+            build_contexts: |
+              controller=v2/controller
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v2-httpgate
             image_name: devbox-v2-httpgate
             dockerfile: v2/httpgate/Dockerfile
             context: v2/httpgate
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v2-httpgate
+            image_name: devbox-v2-httpgate
+            dockerfile: v2/httpgate/Dockerfile
+            context: v2/httpgate
+            arch: arm64
+            runner: ubuntu-24.04-arm
           - name: v2-sshgate
             image_name: devbox-v2-sshgate
             dockerfile: v2/sshgate/Dockerfile
             context: v2/sshgate
-            platforms: linux/amd64,linux/arm64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: v2-sshgate
+            image_name: devbox-v2-sshgate
+            dockerfile: v2/sshgate/Dockerfile
+            context: v2/sshgate
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -125,33 +227,94 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
-
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        env:
+          BUILD_CONTEXTS: ${{ matrix.build_contexts || '' }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
+          TAGS=(
+            "${IMAGE}:${GITHUB_REF_NAME}-${{ matrix.arch }}"
+            "${IMAGE}:sha-${SHORT_SHA}-${{ matrix.arch }}"
+          )
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            TAGS+=("${IMAGE}:latest-${{ matrix.arch }}")
+          fi
+
+          BUILD_ARGS=(
+            --platform "linux/${{ matrix.arch }}"
+            --file "${{ matrix.dockerfile }}"
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME}"
+            --label "org.opencontainers.image.architecture=${{ matrix.arch }}"
+            --label "runnumber=${GITHUB_RUN_ID}"
+          )
+          while IFS= read -r build_context; do
+            if [ -n "${build_context}" ]; then
+              BUILD_ARGS+=(--build-context "${build_context}")
+            fi
+          done <<< "${BUILD_CONTEXTS}"
+          for tag in "${TAGS[@]}"; do
+            BUILD_ARGS+=(--tag "${tag}")
+          done
+
+          docker build "${BUILD_ARGS[@]}" "${{ matrix.context }}"
+          for tag in "${TAGS[@]}"; do
+            docker push "${tag}"
+          done
+
+  v2-image-manifests:
+    name: Publish / v2-image manifests / ${{ matrix.image_name }}
+    runs-on: ubuntu-latest
+    needs:
+      - v2-images
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: devbox-v2-controller
+          - image_name: devbox-v2-frontend
+          - image_name: devbox-v2-server
+          - image_name: devbox-v2-httpgate
+          - image_name: devbox-v2-sshgate
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: ${{ matrix.platforms }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch image manifests
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/${{ matrix.image_name }}"
+
+          docker manifest create "${IMAGE}:${GITHUB_REF_NAME}" \
+            "${IMAGE}:${GITHUB_REF_NAME}-amd64" \
+            "${IMAGE}:${GITHUB_REF_NAME}-arm64"
+          docker manifest push "${IMAGE}:${GITHUB_REF_NAME}"
+
+          docker manifest create "${IMAGE}:sha-${SHORT_SHA}" \
+            "${IMAGE}:sha-${SHORT_SHA}-amd64" \
+            "${IMAGE}:sha-${SHORT_SHA}-arm64"
+          docker manifest push "${IMAGE}:sha-${SHORT_SHA}"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker manifest create "${IMAGE}:latest" \
+              "${IMAGE}:latest-amd64" \
+              "${IMAGE}:latest-arm64"
+            docker manifest push "${IMAGE}:latest"
+          fi
 
   v1-cluster-image:
     name: Build / v1-cluster-image / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     needs:
-      - v1-images
+      - v1-image-manifests
     strategy:
       fail-fast: false
       matrix:
@@ -188,30 +351,36 @@ jobs:
           done
           sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Compute image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/devbox-v1-cluster
-          tags: |
-            type=ref,event=branch,suffix=-${{ matrix.arch }}
-            type=sha,prefix=sha-,suffix=-${{ matrix.arch }}
-            type=raw,value=latest-${{ matrix.arch }},enable=${{ github.ref_name == 'main' }}
-
       - name: Build and push cluster image
-        uses: docker/build-push-action@v6
-        with:
-          context: v1/deploy
-          file: v1/deploy/Kubefile
-          platforms: linux/${{ matrix.arch }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=v1-cluster-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=v1-cluster-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster"
+          TAGS=(
+            "${IMAGE}:${GITHUB_REF_NAME}-${{ matrix.arch }}"
+            "${IMAGE}:sha-${SHORT_SHA}-${{ matrix.arch }}"
+          )
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            TAGS+=("${IMAGE}:latest-${{ matrix.arch }}")
+          fi
+
+          BUILD_ARGS=(
+            --platform "linux/${{ matrix.arch }}"
+            --file v1/deploy/Kubefile
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+            --label "org.opencontainers.image.version=${GITHUB_REF_NAME}"
+            --label "org.opencontainers.image.architecture=${{ matrix.arch }}"
+            --label "runnumber=${GITHUB_RUN_ID}"
+          )
+          for tag in "${TAGS[@]}"; do
+            BUILD_ARGS+=(--tag "${tag}")
+          done
+
+          docker build "${BUILD_ARGS[@]}" v1/deploy
+          for tag in "${TAGS[@]}"; do
+            docker push "${tag}"
+          done
 
       - name: Save cluster image package
         if: github.ref_name == 'main'
@@ -263,9 +432,6 @@ jobs:
     needs:
       - v1-cluster-image
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -276,22 +442,22 @@ jobs:
       - name: Create multi-arch manifests
         run: |
           set -euo pipefail
-          docker buildx imagetools create \
-            -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}" \
+          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}" \
             "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}-amd64" \
             "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}-arm64"
+          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:${GITHUB_REF_NAME}"
 
           SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
-          docker buildx imagetools create \
-            -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}" \
+          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}" \
             "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}-amd64" \
             "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}-arm64"
+          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:sha-${SHORT_SHA}"
 
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            docker buildx imagetools create \
-              -t "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest" \
+            docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest" \
               "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest-amd64" \
               "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest-arm64"
+            docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest"
           fi
 
   v1-cri-shim-patch-oss:
@@ -299,7 +465,7 @@ jobs:
     if: github.ref_name == 'main'
     runs-on: ${{ matrix.runner }}
     needs:
-      - v1-images
+      - v1-image-manifests
     strategy:
       fail-fast: false
       matrix:
