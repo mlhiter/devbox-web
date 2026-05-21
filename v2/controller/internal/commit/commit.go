@@ -21,7 +21,6 @@ import (
 	"github.com/containerd/nerdctl/v2/pkg/api/types"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/container"
 	"github.com/containerd/nerdctl/v2/pkg/cmd/image"
-	"github.com/containerd/nerdctl/v2/pkg/cmd/login"
 	"github.com/containerd/nerdctl/v2/pkg/containerutil"
 	ncdefaults "github.com/containerd/nerdctl/v2/pkg/defaults"
 	nerderrutil "github.com/containerd/nerdctl/v2/pkg/errutil"
@@ -104,15 +103,8 @@ func NewCommitter(
 	var conn *grpc.ClientConn
 	var err error
 
-	// login to registry
-	err = login.Login(context.Background(), types.LoginCommandOptions{
-		GOptions:      *newGlobalOptionConfigWithSnapshotter(snapshotter),
-		ServerAddress: registryAddr,
-		Username:      registryUsername,
-		Password:      registryPassword,
-	}, io.Discard)
-	if err != nil {
-		return nil, err
+	if err := registerRegistryCredentials(registryAddr, registryUsername, registryPassword); err != nil {
+		return nil, fmt.Errorf("register registry credentials: %w", err)
 	}
 
 	// retry to connect
