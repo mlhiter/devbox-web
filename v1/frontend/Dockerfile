@@ -1,7 +1,7 @@
 # Install dependencies only when needed
-FROM node:current-alpine AS deps
+FROM node:20.4.0-alpine AS deps
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat && npm install -g pnpm
+RUN apk add --no-cache libc6-compat && npm install -g pnpm@10.32.1
 WORKDIR /workspace/frontend
 
 # Install dependencies based on the preferred package manager
@@ -12,7 +12,7 @@ RUN \
   (echo "Lockfile not found." && exit 1)
 
 # Rebuild the source code only when needed
-FROM node:current-alpine AS builder
+FROM node:20.4.0-alpine AS builder
 WORKDIR /workspace/frontend
 COPY --from=deps /workspace/frontend/node_modules ./node_modules
 COPY . .
@@ -26,10 +26,10 @@ ENV NEXT_PUBLIC_MOCK_USER ''
 ARG DEVBOX_COMMIT_HASH=source-unavailable
 ENV NEXT_PUBLIC_DEVBOX_COMMIT_HASH=${DEVBOX_COMMIT_HASH}
 
-RUN npm install -g pnpm && pnpm run build
+RUN npm install -g pnpm@10.32.1 && pnpm run build
 
 # Production image, copy all the files and run next
-FROM node:current-alpine AS runner
+FROM node:20.4.0-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
