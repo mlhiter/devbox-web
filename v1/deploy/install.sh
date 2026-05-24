@@ -122,6 +122,17 @@ cleanup_legacy_yaml_deploy() {
   fi
 }
 
+adopt_namespace_for_helm() {
+  local namespace=$1
+
+  kubectl create namespace "${namespace}" --dry-run=client -o yaml | kubectl apply -f -
+  kubectl label namespace "${namespace}" app.kubernetes.io/managed-by=Helm --overwrite
+  kubectl annotate namespace "${namespace}" \
+    meta.helm.sh/release-name="${RELEASE_NAME}" \
+    meta.helm.sh/release-namespace="${NAMESPACE}" \
+    --overwrite
+}
+
 value_or_default() {
   local value=$1
   local fallback=$2
@@ -178,6 +189,7 @@ fi
 
 ensure_user_values_file
 cleanup_legacy_yaml_deploy
+adopt_namespace_for_helm "${NAMESPACE}"
 
 if [ -d "./charts/devbox-v1/crds" ] && compgen -G "./charts/devbox-v1/crds/*.yaml" >/dev/null; then
   info "Applying Devbox v1 CRDs"
