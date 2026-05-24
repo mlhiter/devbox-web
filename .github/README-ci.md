@@ -5,7 +5,7 @@ This repository publishes CI artifacts and container images from `github.com/sea
 ## Workflows
 
 - `CI`
-  Runs controller tests, server checks, frontend verification, and gateway/service builds for `v1` and `v2`.
+  Runs controller tests, server checks, frontend verification, gateway/service builds, and VS Code extension verification for `v1` and `v2`.
 - `Images`
   Builds and pushes the following images to GHCR:
   - `ghcr.io/sealos-apps/devbox-v1-controller`

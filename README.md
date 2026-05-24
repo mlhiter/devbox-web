@@ -9,6 +9,8 @@ This repository contains the DevBox codebase split by version (`v1` and `v2`), w
 - a `frontend` app (Next.js)
 - a `controller` service (Kubernetes operator)
 
+It also contains the shared VS Code extension used by both frontend versions to open DevBox environments in compatible local IDEs.
+
 > [!NOTE]
 > `v2` is the current development line and should be preferred for new work.
 
@@ -26,6 +28,7 @@ DevBox provides a cloud IDE/workspace experience on Kubernetes. The frontend han
 | `v1/controller` | DevBox v1 Kubernetes controller (Kubebuilder project) |
 | `v2/frontend` | DevBox v2 web app (Next.js + TypeScript, current) |
 | `v2/controller` | DevBox v2 Kubernetes controller (Kubebuilder project, current) |
+| `extensions/vscode` | DevBox VS Code extension (`labring.devbox-aio`) |
 
 ## Prerequisites
 
@@ -88,6 +91,14 @@ To see all available targets:
 make help
 ```
 
+### `extensions/vscode`
+
+```bash
+npm ci
+npm run lint
+npm run package
+```
+
 ## Images
 
 Default image names now follow the new repository naming:
@@ -106,9 +117,9 @@ You can override these at build or deploy time with `IMG=...` for controllers an
 
 ## Release
 
-GitHub Actions workflows live under [`.github/workflows`](/Users/yy/archary/sealos-devbox/.github/workflows) and are split into three stages:
+GitHub Actions workflows live under [`.github/workflows`](./.github/workflows) and are split into three stages:
 
-- `CI`: validates `v1/v2` controllers and frontends on pull requests and pushes to `main`
+- `CI`: validates `v1/v2` controllers, frontends, gateways/services, and the VS Code extension on pull requests and pushes to `main`
 - `Images`: builds and pushes GHCR images on `main` or manual dispatch, and uploads `main` branch v1 offline image packages to OSS
 - `Release`: builds release images on `v*` tags, publishes a GitHub Release with manifests/binaries/charts, and uploads v1 offline image packages to OSS
 
@@ -154,6 +165,7 @@ If you need the legacy line, use the same workflow in `v1/frontend` and `v1/cont
 - [`v2/controller/README.md`](./v2/controller/README.md)
 - [`v1/frontend/README.md`](./v1/frontend/README.md)
 - [`v1/controller/README.md`](./v1/controller/README.md)
+- [`extensions/vscode/README.md`](./extensions/vscode/README.md)
 
 > [!TIP]
 > Frontend packages in this repo are consumed from npm (published `@labring/*` packages). Avoid `yalc link` / `yalc remove` workflows here.
