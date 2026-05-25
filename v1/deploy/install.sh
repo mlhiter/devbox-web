@@ -110,7 +110,7 @@ cleanup_legacy_yaml_deploy() {
     --ignore-not-found=true
 
   local frontend_namespace
-  for frontend_namespace in devbox-frontend devbox-system; do
+  for frontend_namespace in devbox-system; do
     kubectl delete configmap devbox-frontend-config -n "${frontend_namespace}" --ignore-not-found=true
     kubectl delete deployment devbox-frontend -n "${frontend_namespace}" --ignore-not-found=true
     kubectl delete service devbox-frontend -n "${frontend_namespace}" --ignore-not-found=true
@@ -120,6 +120,23 @@ cleanup_legacy_yaml_deploy() {
   if kubectl api-resources --api-group=app.sealos.io --no-headers 2>/dev/null | awk '$1 == "apps" { found=1 } END { exit found ? 0 : 1 }'; then
     kubectl delete apps.app.sealos.io devbox -n app-system --ignore-not-found=true
   fi
+}
+
+cleanup_legacy_frontend_namespace() {
+  local frontend_namespace=devbox-frontend
+
+  if ! kubectl get namespace "${frontend_namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  info "Cleaning legacy frontend resources from namespace ${frontend_namespace}"
+  kubectl delete configmap devbox-frontend-config -n "${frontend_namespace}" --ignore-not-found=true
+  kubectl delete deployment devbox-frontend -n "${frontend_namespace}" --ignore-not-found=true
+  kubectl delete service devbox-frontend -n "${frontend_namespace}" --ignore-not-found=true
+  kubectl delete ingress devbox-frontend devbox-challenge -n "${frontend_namespace}" --ignore-not-found=true
+
+  info "Deleting legacy namespace ${frontend_namespace}"
+  kubectl delete namespace "${frontend_namespace}" --ignore-not-found=true
 }
 
 ensure_helm_namespace_ownership() {
@@ -196,6 +213,7 @@ fi
 
 ensure_user_values_file
 cleanup_legacy_yaml_deploy
+cleanup_legacy_frontend_namespace
 ensure_helm_namespace_ownership "${NAMESPACE}"
 
 if [ -d "./charts/devbox-v1/crds" ] && compgen -G "./charts/devbox-v1/crds/*.yaml" >/dev/null; then
