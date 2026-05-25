@@ -122,6 +122,24 @@ cleanup_legacy_yaml_deploy() {
   fi
 }
 
+ensure_helm_namespace_ownership() {
+  local namespace=$1
+
+  if ! kubectl get namespace "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  info "Ensuring Helm ownership metadata on namespace ${namespace}"
+  kubectl label namespace "${namespace}" \
+    app.kubernetes.io/managed-by=Helm \
+    app.kubernetes.io/name=devbox \
+    --overwrite
+  kubectl annotate namespace "${namespace}" \
+    "meta.helm.sh/release-name=${RELEASE_NAME}" \
+    "meta.helm.sh/release-namespace=${NAMESPACE}" \
+    --overwrite
+}
+
 value_or_default() {
   local value=$1
   local fallback=$2
@@ -178,6 +196,7 @@ fi
 
 ensure_user_values_file
 cleanup_legacy_yaml_deploy
+ensure_helm_namespace_ownership "${NAMESPACE}"
 
 if [ -d "./charts/devbox-v1/crds" ] && compgen -G "./charts/devbox-v1/crds/*.yaml" >/dev/null; then
   info "Applying Devbox v1 CRDs"

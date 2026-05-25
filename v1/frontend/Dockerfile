@@ -59,6 +59,7 @@ COPY --from=builder /workspace/frontend/package.json ./package.json
 # project as "frontend"; copy its contents to /app for a simple runtime entry.
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/.next/standalone/frontend ./
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/node_modules ./node_modules
 # Next standalone includes prisma schemas/clients but not migrations.
 # Keep both providers' migrations for initContainer migrate deploy.
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/prisma/cockroach/schema.prisma ./prisma/cockroach/schema.prisma

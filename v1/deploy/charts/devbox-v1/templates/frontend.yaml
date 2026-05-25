@@ -43,6 +43,7 @@ spec:
         args:
         - |-
           cd /app
+          export PATH="/app/node_modules/.bin:$PATH"
           DB_PROVIDER="${DATABASE_PROVIDER:-cockroachdb}"
           SCHEMA_PATH="./prisma/cockroach/schema.prisma"
           MIGRATION="20260125094114_add_template_repository_kind"
