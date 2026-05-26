@@ -21,16 +21,32 @@ RELEASE_NAME="${RELEASE_NAME:-devbox-v1}"
 NAMESPACE="${NAMESPACE:-devbox-system}"
 HELM_OPTS="${HELM_OPTS:-}"
 DEFAULT_VALUES_FILE="./charts/devbox-v1/devbox-v1-values.yaml"
-USER_VALUES_DIR="/root/.sealos/cloud/values/apps/devbox-v1"
+USER_VALUES_DIR="/root/.sealos/cloud/values/apps/devbox"
 USER_VALUES_FILE="${USER_VALUES_DIR}/devbox-v1-values.yaml"
 GLOBAL_VALUES_FILE="/root/.sealos/cloud/values/global.yaml"
+TOOLS_FILE="${TOOLS_FILE:-/root/.sealos/cloud/scripts/tools.sh}"
+
+if [ -f "${TOOLS_FILE}" ]; then
+  # shellcheck source=/dev/null
+  source "${TOOLS_FILE}"
+else
+  echo "tools.sh not found at ${TOOLS_FILE}. Cannot proceed." >&2
+  exit 1
+fi
+
+required_tool_functions=(fetch_configmap_data_key read_cert_tls_reject_unauthorized read_jwt_internal read_yaml_file_path)
+for tool_function in "${required_tool_functions[@]}"; do
+  if ! declare -f "${tool_function}" >/dev/null 2>&1; then
+    error "${tool_function} not found in ${TOOLS_FILE}. Please sync latest Sealos tools.sh."
+  fi
+done
 
 get_configmap_data() {
   local namespace=$1
   local name=$2
   local key=$3
 
-  kubectl get configmap "${name}" -n "${namespace}" -o "jsonpath={.data.${key}}" 2>/dev/null || true
+  fetch_configmap_data_key "${name}" "${key}" "${namespace}" 1 0 2>/dev/null || true
 }
 
 get_desktop_config_value() {
@@ -41,22 +57,6 @@ get_desktop_config_value() {
   [ -n "${raw}" ] || return 0
 
   printf '%s\n' "${raw}" | awk -v key="${key}" '$1 == key ":" { gsub(/"/, "", $2); print $2; exit }'
-}
-
-get_tls_reject_unauthorized() {
-  local cert_mode
-
-  cert_mode="$(kubectl get configmap cert-config -n sealos-system -o jsonpath='{.data.CERT_MODE}' 2>/dev/null || true)"
-  cert_mode="$(printf '%s' "${cert_mode}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-
-  case "${cert_mode}" in
-    https|acme)
-      printf '0'
-      ;;
-    *)
-      printf '1'
-      ;;
-  esac
 }
 
 random_secret() {
@@ -173,7 +173,7 @@ cloud_domain="$(value_or_default "${cloud_domain}" "127.0.0.1.nip.io")"
 
 cloud_port="$(value_or_default "${cloudPort:-${CLOUD_PORT:-}}" "$(get_configmap_data sealos-system sealos-config cloudPort)")"
 cert_secret_name="$(value_or_default "${certSecretName:-${CERT_SECRET_NAME:-}}" "wildcard-cert")"
-tls_reject_unauthorized="$(get_tls_reject_unauthorized)"
+tls_reject_unauthorized="$(read_cert_tls_reject_unauthorized)"
 
 registry_addr="$(value_or_default "${registryAddr:-${REGISTRY_ADDR:-}}" "$(get_configmap_data sealos-system registry-config REGISTRY_ADDR)")"
 registry_addr="$(value_or_default "${registry_addr}" "$(get_configmap_data sealos-system devbox-config registryAddress)")"
@@ -207,7 +207,7 @@ if [ -z "${region_uid}" ]; then
   warn "regionUID was not detected; generated ${region_uid}"
 fi
 
-jwt_secret="$(value_or_default "${jwtSecret:-${JWT_SECRET:-}}" "$(get_configmap_data sealos-system sealos-config jwtInternal)")"
+jwt_secret="$(value_or_default "${jwtSecret:-${JWT_SECRET:-}}" "$(read_jwt_internal)")"
 jwt_secret="$(value_or_default "${jwt_secret}" "$(get_desktop_config_value internal)")"
 if [ -z "${jwt_secret}" ]; then
   jwt_secret="$(random_secret)"
@@ -226,10 +226,14 @@ else
   warn "No CRDs found in ./charts/devbox-v1/crds; skipping CRD apply"
 fi
 
+billing_currency="$(read_yaml_file_path '.global.billing.currency')"
+billing_currency="$(value_or_default "${billing_currency}" "cny")"
+
 helm_set_args=(
   --set-string "cloudDomain=${cloud_domain}"
   --set-string "cloudPort=${cloud_port}"
   --set-string "certSecretName=${cert_secret_name}"
+  --set-string "frontend.env.currencySymbol=${billing_currency}"
   --set-string "registry.addr=${registry_addr}"
   --set-string "registry.user=${registry_user}"
   --set-string "registry.password=${registry_password}"
