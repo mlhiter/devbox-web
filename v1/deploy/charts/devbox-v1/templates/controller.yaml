@@ -52,9 +52,9 @@ spec:
         - --enable-pod-expected-annotations-matcher={{ .Values.controller.matchers.enablePodAnnotationsMatcher }}
         - --enable-pod-env-matcher={{ .Values.controller.matchers.enablePodEnvMatcher }}
         - --enable-pod-extra-resource-matcher={{ .Values.controller.matchers.enablePodResourceMatcher }}
-        - --registry-addr={{ .Values.registry.addr }}
-        - --registry-user={{ .Values.registry.user }}
-        - --registry-password={{ .Values.registry.password }}
+        - {{ printf "--registry-addr=%s" (include "devbox-v1.registryAddr" .) | quote }}
+        - {{ printf "--registry-user=%s" (include "devbox-v1.registryUser" .) | quote }}
+        - {{ printf "--registry-password=%s" (include "devbox-v1.registryPassword" .) | quote }}
         command:
         - /manager
         image: {{ include "devbox-v1.controllerImage" . | quote }}

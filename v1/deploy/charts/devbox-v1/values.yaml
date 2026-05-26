@@ -3,9 +3,9 @@ cloudPort: ""
 certSecretName: "wildcard-cert"
 
 registry:
-  addr: "sealos.hub:5000"
-  user: "admin"
-  password: "passw0rd"
+  addr: ""
+  user: ""
+  password: ""
 
 platform:
   databaseUrl: ""

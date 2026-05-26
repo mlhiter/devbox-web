@@ -175,11 +175,14 @@ cloud_port="$(value_or_default "${cloudPort:-${CLOUD_PORT:-}}" "$(get_configmap_
 cert_secret_name="$(value_or_default "${certSecretName:-${CERT_SECRET_NAME:-}}" "wildcard-cert")"
 tls_reject_unauthorized="$(get_tls_reject_unauthorized)"
 
-registry_addr="$(value_or_default "${registryAddr:-${REGISTRY_ADDR:-}}" "$(get_configmap_data sealos-system devbox-config registryAddress)")"
+registry_addr="$(value_or_default "${registryAddr:-${REGISTRY_ADDR:-}}" "$(get_configmap_data sealos-system registry-config REGISTRY_ADDR)")"
+registry_addr="$(value_or_default "${registry_addr}" "$(get_configmap_data sealos-system devbox-config registryAddress)")"
 registry_addr="$(value_or_default "${registry_addr}" "sealos.hub:5000")"
-registry_user="$(value_or_default "${registryUser:-${REGISTRY_USER:-}}" "$(get_configmap_data sealos-system devbox-config registryUsername)")"
+registry_user="$(value_or_default "${registryUser:-${REGISTRY_USER:-}}" "$(get_configmap_data sealos-system registry-config ADMIN_USER)")"
+registry_user="$(value_or_default "${registry_user}" "$(get_configmap_data sealos-system devbox-config registryUsername)")"
 registry_user="$(value_or_default "${registry_user}" "admin")"
-registry_password="$(value_or_default "${registryPassword:-${REGISTRY_PASSWORD:-}}" "$(get_configmap_data sealos-system devbox-config registryPassword)")"
+registry_password="$(value_or_default "${registryPassword:-${REGISTRY_PASSWORD:-}}" "$(get_configmap_data sealos-system registry-config ADMIN_PASSWORD)")"
+registry_password="$(value_or_default "${registry_password}" "$(get_configmap_data sealos-system devbox-config registryPassword)")"
 registry_password="$(value_or_default "${registry_password}" "passw0rd")"
 
 database_url="$(value_or_default "${databaseUrl:-${DATABASE_URL:-}}" "")"

@@ -82,11 +82,11 @@ spec:
         - name: INGRESS_SECRET
           value: {{ .Values.certSecretName | quote }}
         - name: REGISTRY_ADDR
-          value: {{ .Values.registry.addr | quote }}
+          value: {{ include "devbox-v1.registryAddr" . | quote }}
         - name: REGISTRY_USER
-          value: {{ .Values.registry.user | quote }}
+          value: {{ include "devbox-v1.registryUser" . | quote }}
         - name: REGISTRY_PASSWORD
-          value: {{ .Values.registry.password | quote }}
+          value: {{ include "devbox-v1.registryPassword" . | quote }}
         - name: DEVBOX_AFFINITY_ENABLE
           value: {{ .Values.frontend.env.devboxAffinityEnable | quote }}
         - name: MONITOR_URL
