@@ -121,6 +121,9 @@ func (r *DevBoxReleaseReconciler) CreateReleaseTag(ctx context.Context, devboxRe
 		if commitHistory == nil {
 			return fmt.Errorf("no successful commit history found")
 		}
+		if err := r.ManifestExists(commitHistory.Image); err != nil {
+			return err
+		}
 		devboxRelease.Status.OriginalImage = commitHistory.Image
 	}
 	// get image info from devbox last successful commit history image and devbox release original image
@@ -134,6 +137,14 @@ func (r *DevBoxReleaseReconciler) CreateReleaseTag(ctx context.Context, devboxRe
 		return err
 	}
 	return r.Registry.TagImage(hostName, imageName, oldTag, devboxRelease.Spec.NewTag)
+}
+
+func (r *DevBoxReleaseReconciler) ManifestExists(image string) error {
+	res, err := reference.ParseReference(image)
+	if err != nil {
+		return err
+	}
+	return r.Registry.ManifestExists(res.Context().RegistryStr(), res.Context().RepositoryStr(), res.Identifier())
 }
 
 func (r *DevBoxReleaseReconciler) DeleteReleaseTag(_ context.Context, _ *devboxv1alpha1.DevBoxRelease) error {

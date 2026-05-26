@@ -40,6 +40,11 @@ func (t *Client) TagImage(hostName string, imageName string, oldTag string, newT
 	return t.pushManifest(t.Username, t.Password, hostName, imageName, newTag, manifest)
 }
 
+func (t *Client) ManifestExists(hostName string, imageName string, tag string) error {
+	_, err := t.pullManifest(t.Username, t.Password, hostName, imageName, tag)
+	return err
+}
+
 func (t *Client) pullManifest(username string, password string, hostName string, imageName string, tag string) ([]byte, error) {
 	var (
 		client = http.DefaultClient

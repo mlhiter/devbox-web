@@ -84,3 +84,39 @@ func TestClientPullManifestNotFound(t *testing.T) {
 		t.Fatalf("pullManifest() error = %v, want %v", err, ErrorManifestNotFound)
 	}
 }
+
+func TestClientManifestExists(t *testing.T) {
+	const (
+		username = "admin"
+		password = "passw0rd"
+		image    = "default/devbox-sample"
+		tag      = "ready"
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user, pass, ok := r.BasicAuth(); !ok || user != username || pass != password {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/v2/"+image+"/manifests/"+tag {
+			w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+			_, _ = w.Write([]byte(`{"schemaVersion":2}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := &Client{
+		Username: username,
+		Password: password,
+	}
+	hostName := strings.TrimPrefix(server.URL, "http://")
+
+	if err := client.ManifestExists(hostName, image, tag); err != nil {
+		t.Fatalf("ManifestExists() error = %v, want nil", err)
+	}
+	if err := client.ManifestExists(hostName, image, "missing"); err != ErrorManifestNotFound {
+		t.Fatalf("ManifestExists() error = %v, want %v", err, ErrorManifestNotFound)
+	}
+}
