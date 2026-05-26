@@ -35,6 +35,7 @@ WORKDIR /app
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -66,6 +67,8 @@ COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/prisma/cockroach/s
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/prisma/cockroach/migrations ./prisma/cockroach/migrations
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/prisma/postgresql/schema.prisma ./prisma/postgresql/schema.prisma
 COPY --from=builder --chown=nextjs:nodejs /workspace/frontend/prisma/postgresql/migrations ./prisma/postgresql/migrations
+
+RUN test -x /app/node_modules/.bin/prisma && prisma --version
 
 USER nextjs
 

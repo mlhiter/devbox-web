@@ -6,6 +6,7 @@
 {{- $_ := set $namespaces .Values.frontend.namespace true -}}
 {{- end }}
 {{- range $namespace, $_ := $namespaces }}
+{{- if ne $namespace $.Release.Namespace }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -14,4 +15,5 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: devbox
   name: {{ $namespace | quote }}
+{{- end }}
 {{- end }}
