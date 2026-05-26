@@ -118,6 +118,8 @@
   "delete": "删除",
   "delete_failed": "删除失败",
   "delete_lasted_template_version_prompt": "删除此版本后，该模板将没有版本记录，导致无法继续使用。",
+  "delete_port": "删除端口",
+  "delete_port_prompt": "确定要删除该端口吗？删除后需要点击页面右上角的变更才会保存。",
   "delete_successful": "删除成功",
   "delete_template": "删除模板",
   "delete_template_prompt": "是否删除 {name} ？此操作不可撤销，请确保该模板不再需要。",

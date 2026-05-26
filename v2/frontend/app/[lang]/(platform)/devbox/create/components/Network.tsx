@@ -7,6 +7,7 @@ import { useFieldArray, useFormContext } from 'react-hook-form';
 
 import { nanoid } from '@/utils/tools';
 import { useEnvStore } from '@/stores/env';
+import { useConfirm } from '@/hooks/useConfirm';
 import { ProtocolList } from '@/constants/devbox';
 import { DevboxEditTypeV2, ProtocolType } from '@/types/devbox';
 
@@ -46,6 +47,12 @@ export default function Network({
     name: 'networks'
   });
   const t = useTranslations();
+  const { openConfirm: openDeletePortConfirm, ConfirmChild: DeletePortConfirmChild } = useConfirm({
+    title: 'delete_port',
+    content: 'delete_port_prompt',
+    confirmText: 'confirm_delete',
+    confirmButtonVariant: 'destructive'
+  });
 
   const appendNetworks = () => {
     const currentNetworks = getValues('networks');
@@ -248,7 +255,7 @@ export default function Network({
                         size="icon"
                         className="h-9 w-9 bg-white text-neutral-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                         disabled={isReservedPort}
-                        onClick={() => removeNetworks(i)}
+                        onClick={() => openDeletePortConfirm(() => removeNetworks(i))()}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -282,6 +289,7 @@ export default function Network({
           }}
         />
       )}
+      <DeletePortConfirmChild />
     </>
   );
 }
