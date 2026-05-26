@@ -6,18 +6,27 @@ import { useCallback, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@labring/sealos-ui';
 import { Button } from '@labring/sealos-ui/button';
 
+const confirmDialogContentStyle: React.CSSProperties = {
+  top: '20%',
+  transform: 'translateX(-50%)',
+  animation: 'none',
+  transitionDuration: '0ms'
+};
+
 export const useConfirm = ({
   title = 'prompt',
   content,
   contentParams,
   confirmText = 'confirm',
-  cancelText = 'cancel'
+  cancelText = 'cancel',
+  confirmButtonVariant
 }: {
   title?: string;
   content: string;
   contentParams?: Record<string, string | number>;
   confirmText?: string;
   cancelText?: string;
+  confirmButtonVariant?: React.ComponentProps<typeof Button>['variant'];
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const t = useTranslations();
@@ -35,7 +44,7 @@ export const useConfirm = ({
     ConfirmChild: useCallback(
       () => (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogContent className="w-[400px]">
+          <DialogContent className="w-[400px]" style={confirmDialogContentStyle}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-1.5">
                 <TriangleAlert className="h-4 w-4 text-yellow-600" />
@@ -54,6 +63,7 @@ export const useConfirm = ({
                 {t(cancelText)}
               </Button>
               <Button
+                variant={confirmButtonVariant}
                 onClick={() => {
                   setIsOpen(false);
                   typeof confirmCb.current === 'function' && confirmCb.current();
@@ -65,7 +75,7 @@ export const useConfirm = ({
           </DialogContent>
         </Dialog>
       ),
-      [cancelText, confirmText, content, contentParams, isOpen, t, title]
+      [cancelText, confirmButtonVariant, confirmText, content, contentParams, isOpen, t, title]
     )
   };
 };

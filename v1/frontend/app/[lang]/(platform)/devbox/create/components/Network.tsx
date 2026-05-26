@@ -7,6 +7,7 @@ import { useFieldArray, useFormContext } from 'react-hook-form';
 
 import { nanoid } from '@/utils/tools';
 import { useEnvStore } from '@/stores/env';
+import { useConfirm } from '@/hooks/useConfirm';
 import { ProtocolList } from '@/constants/devbox';
 import { DevboxEditTypeV2, ProtocolType } from '@/types/devbox';
 
@@ -46,6 +47,12 @@ export default function Network({
     name: 'networks'
   });
   const t = useTranslations();
+  const { openConfirm: openDeletePortConfirm, ConfirmChild: DeletePortConfirmChild } = useConfirm({
+    title: 'delete_port',
+    content: 'delete_port_prompt',
+    confirmText: 'confirm_delete',
+    confirmButtonVariant: 'destructive'
+  });
 
   const appendNetworks = () => {
     const currentNetworks = getValues('networks');
@@ -225,14 +232,14 @@ export default function Network({
                               </SelectContent>
                             </Select>
                             <div className="flex h-10 shrink-0 grow items-center rounded-r-md border border-l-0 px-3 py-2">
-                              <div className="mr-2 min-w-64 flex-1 truncate text-sm/5 text-muted-foreground select-all">
+                              <div className="mr-2 min-w-64 flex-1 select-all truncate text-sm/5 text-muted-foreground">
                                 {network.customDomain
                                   ? network.customDomain
                                   : network.publicDomain!}
                               </div>
                               <Button
                                 variant="ghost"
-                                className="cursor-pointer text-sm/5 whitespace-nowrap text-blue-600 hover:bg-white hover:text-blue-700"
+                                className="cursor-pointer whitespace-nowrap text-sm/5 text-blue-600 hover:bg-white hover:text-blue-700"
                                 disabled={isManagedWebIDEPort}
                                 onClick={() =>
                                   setCustomAccessModalData({
@@ -257,7 +264,7 @@ export default function Network({
                         size="icon"
                         className="h-9 w-9 bg-white text-neutral-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                         disabled={isManagedWebIDEPort}
-                        onClick={() => removeNetworks(i)}
+                        onClick={() => openDeletePortConfirm(() => removeNetworks(i))()}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -291,6 +298,7 @@ export default function Network({
           }}
         />
       )}
+      <DeletePortConfirmChild />
     </>
   );
 }
