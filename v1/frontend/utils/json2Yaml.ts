@@ -1,6 +1,12 @@
 import yaml from 'js-yaml';
 
-import { devboxKey, gpuTypeAnnotationKey, publicDomainKey } from '@/constants/devbox';
+import {
+  devboxKey,
+  gpuNodeSelectorKey,
+  gpuTypeAnnotationKey,
+  normalizeGpuSchedulerMode,
+  publicDomainKey
+} from '@/constants/devbox';
 import { DevboxEditType, DevboxEditTypeV2, json2DevboxV2Data, ProtocolType } from '@/types/devbox';
 import { produce } from 'immer';
 import { nanoid, parseTemplateConfig, str2Num } from './tools';
@@ -90,17 +96,29 @@ export const json2Devbox = (
 export const json2DevboxV2 = (
   data: Omit<json2DevboxV2Data, 'templateRepositoryUid'>,
   devboxAffinityEnable: string = 'true',
-  squashEnable: string = 'false'
+  squashEnable: string = 'false',
+  gpuSchedulerMode: string = 'native'
 ) => {
+  const normalizedGpuSchedulerMode = normalizeGpuSchedulerMode(gpuSchedulerMode);
   const gpuResourceKeyValue = data.gpu?.resource?.card;
   const gpuCoresResourceKeyValue = data.gpu?.resource?.cores;
   const hasGpu = !!data.gpu?.type && !!gpuResourceKeyValue;
+  if (hasGpu && normalizedGpuSchedulerMode === 'native' && !data.gpu?.product) {
+    throw new Error('GPU product is required when GPU_SCHEDULER_MODE is native');
+  }
   const hasGpuCores = hasGpu && !!gpuCoresResourceKeyValue;
-  const gpuConfigAnnotation = hasGpu
-    ? {
-        [gpuTypeAnnotationKey]: data.gpu?.type || ''
-      }
-    : undefined;
+  const gpuConfigAnnotation =
+    hasGpu && normalizedGpuSchedulerMode === 'hami'
+      ? {
+          [gpuTypeAnnotationKey]: data.gpu?.type || ''
+        }
+      : undefined;
+  const gpuNodeSelector =
+    hasGpu && normalizedGpuSchedulerMode === 'native' && data.gpu?.product
+      ? {
+          [gpuNodeSelectorKey]: data.gpu.product
+        }
+      : undefined;
 
   let json: any = {
     apiVersion: 'devbox.sealos.io/v1alpha1',
@@ -125,6 +143,7 @@ export const json2DevboxV2 = (
       },
       templateID: data.templateUid,
       image: data.image,
+      ...(gpuNodeSelector ? { nodeSelector: gpuNodeSelector } : {}),
       config: produce(parseTemplateConfig(data.templateConfig), (draft) => {
         draft.appPorts = data.networks.map((item) => ({
           port: str2Num(item.port),
@@ -629,6 +648,7 @@ export const generateYamlList = (
   data: json2DevboxV2Data,
   env: {
     devboxAffinityEnable?: string;
+    gpuSchedulerMode?: string;
     squashEnable?: string;
     ingressSecret: string;
     nfsStorageClassName?: string;
@@ -657,7 +677,12 @@ export const generateYamlList = (
       : []),
     {
       filename: 'devbox.yaml',
-      value: json2DevboxV2(data, env.devboxAffinityEnable, env.squashEnable)
+      value: json2DevboxV2(
+        data,
+        env.devboxAffinityEnable,
+        env.squashEnable,
+        env.gpuSchedulerMode
+      )
     },
     ...(data.networks.length > 0
       ? [

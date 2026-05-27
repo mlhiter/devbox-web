@@ -29,7 +29,12 @@ import {
   storageFormatToNum
 } from '@/utils/tools';
 import { normalizeStorageDefaultGi } from '@/utils/storage';
-import { devboxRemarkKey, gpuTypeAnnotationKey } from '../constants/devbox';
+import {
+  devboxRemarkKey,
+  gpuNodeSelectorKey,
+  gpuResourceKey,
+  gpuTypeAnnotationKey
+} from '../constants/devbox';
 const DEFAULT_STORAGE_GI = normalizeStorageDefaultGi(process.env.STORAGE_DEFAULT);
 
 const getGpuResourceInfo = (
@@ -37,14 +42,48 @@ const getGpuResourceInfo = (
   gpuType?: string,
   gpuAliasMap?: GpuAliasMap
 ) => {
-  if (!resource || !gpuType || !gpuAliasMap) {
+  if (!resource || !gpuType) {
     return { amount: 0, resource: undefined };
   }
 
-  const matchedAlias = Object.values(gpuAliasMap).find((alias) => alias?.default === gpuType);
-  const resourceKey = matchedAlias?.resource?.card;
+  const matchedAlias = Object.entries(gpuAliasMap || {}).find(
+    ([key, alias]) => key === gpuType || alias?.default === gpuType
+  )?.[1];
+  const resourceKey =
+    matchedAlias?.resource?.card || (resource[gpuResourceKey] ? gpuResourceKey : undefined);
   const amount = resourceKey ? Number(resource?.[resourceKey] || 0) : 0;
-  return { amount, resource: matchedAlias?.resource };
+  return {
+    amount,
+    resource: matchedAlias?.resource || (resourceKey ? { card: resourceKey } : undefined)
+  };
+};
+
+const resolveGpuAlias = (gpuType?: string, gpuAliasMap?: GpuAliasMap) => {
+  if (!gpuType || !gpuAliasMap) return undefined;
+
+  return Object.entries(gpuAliasMap).find(
+    ([key, alias]) => key === gpuType || alias?.default === gpuType
+  )?.[1];
+};
+
+const resolveGpuType = (
+  gpuAnnotation?: string,
+  gpuProduct?: string,
+  gpuAliasMap?: GpuAliasMap
+) => {
+  if (gpuAnnotation) return gpuAnnotation;
+  if (!gpuProduct) return undefined;
+
+  return resolveGpuAlias(gpuProduct, gpuAliasMap)?.default || gpuProduct;
+};
+
+const resolveGpuProduct = (
+  gpuType?: string,
+  gpuProduct?: string,
+  gpuAliasMap?: GpuAliasMap
+) => {
+  if (gpuProduct) return gpuProduct;
+  return resolveGpuAlias(gpuType, gpuAliasMap)?.product;
 };
 
 export const adaptDevboxListItemV2 = (
@@ -60,7 +99,10 @@ export const adaptDevboxListItemV2 = (
   ],
   gpuAliasMap?: GpuAliasMap
 ): DevboxListItemTypeV2 => {
-  const gpuType = devbox.spec.config.annotations?.[gpuTypeAnnotationKey];
+  const rawGpuProduct = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
+  const gpuAnnotation = devbox.spec.config.annotations?.[gpuTypeAnnotationKey];
+  const gpuType = resolveGpuType(gpuAnnotation, rawGpuProduct, gpuAliasMap);
+  const gpuProduct = resolveGpuProduct(gpuType, rawGpuProduct, gpuAliasMap);
   const { amount: gpuAmount, resource: gpuResource } = getGpuResourceInfo(
     devbox.spec.resource as Record<string, any>,
     gpuType,
@@ -83,6 +125,7 @@ export const adaptDevboxListItemV2 = (
     gpu: gpuType
       ? {
           type: gpuType,
+          product: gpuProduct,
           amount: Number(gpuAmount || 0),
           manufacturers: 'nvidia',
           resource: gpuResource
@@ -219,7 +262,10 @@ export const adaptDevboxDetailV2 = (
       devbox.spec.resource['ephemeral-storage'] || `${DEFAULT_STORAGE_GI}Gi`
     ),
     gpu: (() => {
-      const gpuType = devbox.spec.config.annotations?.[gpuTypeAnnotationKey];
+      const rawGpuProduct = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
+      const gpuAnnotation = devbox.spec.config.annotations?.[gpuTypeAnnotationKey];
+      const gpuType = resolveGpuType(gpuAnnotation, rawGpuProduct, gpuAliasMap);
+      const gpuProduct = resolveGpuProduct(gpuType, rawGpuProduct, gpuAliasMap);
       const { amount: gpuAmount, resource: gpuResource } = getGpuResourceInfo(
         devbox.spec.resource as Record<string, any>,
         gpuType,
@@ -230,6 +276,7 @@ export const adaptDevboxDetailV2 = (
       }
       return {
         type: gpuType,
+        product: gpuProduct,
         amount: Number(gpuAmount || 0),
         manufacturers: 'nvidia',
         resource: gpuResource

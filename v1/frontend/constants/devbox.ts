@@ -13,6 +13,12 @@ export const publicDomainKey = `cloud.sealos.io/app-deploy-manager-domain`;
 export const devboxRemarkKey = 'cloud.sealos.io/remark';
 export const devboxOwnerRefReadyKey = 'cloud.sealos.io/devbox-owner-references-ready';
 
+export const gpuSchedulerModes = ['hami', 'native'] as const;
+export type GpuSchedulerMode = (typeof gpuSchedulerModes)[number];
+
+export const normalizeGpuSchedulerMode = (mode?: string): GpuSchedulerMode =>
+  mode === 'hami' ? 'hami' : 'native';
+
 export enum LanguageTypeEnum {
   java = 'java',
   go = 'go',

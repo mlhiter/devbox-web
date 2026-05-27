@@ -221,6 +221,7 @@ function countGpuSource(rawData: ResourcePriceType['data']['properties'], gpuNod
 
     gpuList.push({
       annotationType: gpuNode['gpu.annotationType'] || '',
+      product: gpuNode['gpu.product'],
       price: (matchedPrice.unit_price * valuationMap.gpu) / PRICE_SCALE,
       available: +gpuNode['gpu.available'],
       count: +gpuNode['gpu.count'],

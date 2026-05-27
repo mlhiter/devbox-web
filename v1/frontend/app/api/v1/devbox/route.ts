@@ -500,7 +500,7 @@ export async function POST(req: NextRequest) {
     }
 
     const resourceConfig = convertResourceConfig(devboxForm.resource);
-    const { DEVBOX_AFFINITY_ENABLE, SQUASH_ENABLE } = process.env;
+    const { DEVBOX_AFFINITY_ENABLE, SQUASH_ENABLE, GPU_SCHEDULER_MODE } = process.env;
     const devbox = json2DevboxV2(
       {
         ...devboxForm,
@@ -511,7 +511,8 @@ export async function POST(req: NextRequest) {
         networks: []
       },
       DEVBOX_AFFINITY_ENABLE,
-      SQUASH_ENABLE
+      SQUASH_ENABLE,
+      GPU_SCHEDULER_MODE
     );
 
     const [devboxBody, createdPorts] = await Promise.all([

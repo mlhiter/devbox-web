@@ -5,6 +5,7 @@ export interface SourcePrice {
   nodeports: number;
   gpu?: {
     annotationType: string;
+    product?: string;
     price: number;
     available: number;
     count: number;
@@ -28,6 +29,7 @@ export interface Env {
   ingressSecret: string;
   registryAddr: string;
   devboxAffinityEnable: string;
+  gpuSchedulerMode: 'hami' | 'native';
   squashEnable: string;
   namespace: string;
   rootRuntimeNamespace: string;

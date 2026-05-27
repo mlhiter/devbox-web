@@ -6,6 +6,7 @@ import { useFormContext } from 'react-hook-form';
 
 import { cn } from '@labring/sealos-ui';
 import { Label } from '@labring/sealos-ui/label';
+import { useEnvStore } from '@/stores/env';
 import { usePriceStore } from '@/stores/price';
 import { DevboxEditTypeV2 } from '@/types/devbox';
 import { GPU_AMOUNT_MAX, GpuAmountMarkList } from '@/constants/devbox';
@@ -22,7 +23,7 @@ import {
 export default function Gpu({
   countGpuInventory
 }: {
-  countGpuInventory: (type: string) => number;
+  countGpuInventory: (type: string, product?: string) => number;
 }) {
   type GpuPriceItem = NonNullable<SourcePrice['gpu']>[number];
   type GpuOption = GpuPriceItem & {
@@ -33,11 +34,13 @@ export default function Gpu({
 
   const t = useTranslations();
   const locale = useLocale();
+  const { env } = useEnvStore();
   const { sourcePrice } = usePriceStore();
   const { watch, setValue } = useFormContext<DevboxEditTypeV2>();
   const [selectedGpuOptionKey, setSelectedGpuOptionKey] = useState('none');
 
   const selectedGpuType = watch('gpu.type');
+  const selectedGpuProduct = watch('gpu.product');
   const selectedGpuAmount = watch('gpu.amount');
   const maxGpuAmount = GPU_AMOUNT_MAX;
 
@@ -77,19 +80,29 @@ export default function Gpu({
   const gpuTotalCountMap = useMemo(
     () =>
       (sourcePrice?.gpu || []).reduce<Record<string, number>>((acc, item) => {
-        acc[item.annotationType] = (acc[item.annotationType] || 0) + item.count;
+        const key =
+          env.gpuSchedulerMode === 'native'
+            ? item.product || item.annotationType
+            : item.annotationType;
+        acc[key] = (acc[key] || 0) + item.count;
         return acc;
       }, {}),
-    [sourcePrice?.gpu]
+    [env.gpuSchedulerMode, sourcePrice?.gpu]
   );
+  const getGpuTotalCount = (gpu?: GpuPriceItem) => {
+    if (!gpu) return 0;
+    const key =
+      env.gpuSchedulerMode === 'native' ? gpu.product || gpu.annotationType : gpu.annotationType;
+    return gpuTotalCountMap[key] || gpu.count;
+  };
   const getGpuNodeDisplayName = (gpu?: GpuOption) => {
     if (!gpu) return '-';
     return gpu.nodeAlias;
   };
-  const selectedGpuInventory = selectedGpuType ? countGpuInventory(selectedGpuType) : 0;
-  const selectedGpuTotalCount = selectedGpuType
-    ? gpuTotalCountMap[selectedGpuType] || selectedGpu?.count || 0
+  const selectedGpuInventory = selectedGpuType
+    ? countGpuInventory(selectedGpuType, selectedGpu?.product)
     : 0;
+  const selectedGpuTotalCount = selectedGpuType ? getGpuTotalCount(selectedGpu) : 0;
   const gpuAmountLimit =
     selectedGpuType && selectedGpuType !== 'none'
       ? Math.min(Math.max(0, Math.floor(selectedGpuInventory)), maxGpuAmount)
@@ -129,13 +142,24 @@ export default function Gpu({
     }
 
     const stillValid = gpuOptions.some(
-      (item) => item.optionKey === selectedGpuOptionKey && item.annotationType === selectedGpuType
+      (item) =>
+        item.optionKey === selectedGpuOptionKey &&
+        item.annotationType === selectedGpuType &&
+        (!selectedGpuProduct || item.product === selectedGpuProduct)
     );
     if (stillValid) return;
 
-    const fallback = gpuOptions.find((item) => item.annotationType === selectedGpuType);
+    const fallback =
+      gpuOptions.find(
+        (item) => item.annotationType === selectedGpuType && item.product === selectedGpuProduct
+      ) || gpuOptions.find((item) => item.annotationType === selectedGpuType);
     setSelectedGpuOptionKey(fallback?.optionKey || 'none');
-  }, [gpuOptions, selectedGpuOptionKey, selectedGpuType]);
+  }, [gpuOptions, selectedGpuOptionKey, selectedGpuProduct, selectedGpuType]);
+
+  useEffect(() => {
+    if (!selectedGpu || selectedGpuProduct === selectedGpu.product) return;
+    setValue('gpu.product', selectedGpu.product);
+  }, [selectedGpu, selectedGpuProduct, setValue]);
 
   const handleGpuIconError = (event: SyntheticEvent<HTMLImageElement>) => {
     const target = event.currentTarget;
@@ -163,11 +187,12 @@ export default function Gpu({
 
             const selected = gpuOptions.find((item) => item.optionKey === value);
             if (!selected) return;
-            const available = countGpuInventory(selected.annotationType);
+            const available = countGpuInventory(selected.annotationType, selected.product);
 
             if (available > 0) {
               setSelectedGpuOptionKey(value);
               setValue('gpu.type', selected.annotationType);
+              setValue('gpu.product', selected.product);
               // NOTE: maybe this should be set.
               setValue('gpu.manufacturers', 'nvidia');
               setValue('gpu.resource', selected.resource);
@@ -223,8 +248,8 @@ export default function Gpu({
           <SelectContent>
             <SelectItem value="none">{t('No GPU')}</SelectItem>
             {gpuOptions.map((item) => {
-              const available = countGpuInventory(item.annotationType);
-              const total = gpuTotalCountMap[item.annotationType] || item.count;
+              const available = countGpuInventory(item.annotationType, item.product);
+              const total = getGpuTotalCount(item);
               return (
                 <SelectItem key={item.optionKey} value={item.optionKey} disabled={available <= 0}>
                   <div className="flex min-w-0 items-center gap-2">
@@ -269,7 +294,9 @@ export default function Gpu({
             <Label className="text-sm font-medium text-gray-900">{t('count')}</Label>
             <div className="flex gap-2">
               {gpuAmountOptions.map((item) => {
-                const available = selectedGpuType ? countGpuInventory(selectedGpuType) : 0;
+                const available = selectedGpuType
+                  ? countGpuInventory(selectedGpuType, selectedGpu?.product)
+                  : 0;
                 const isLegacyOption = item.value > maxGpuAmount;
                 const isSelectable = item.value <= available && !isLegacyOption;
                 const isSelected = selectedGpuAmount === item.value;

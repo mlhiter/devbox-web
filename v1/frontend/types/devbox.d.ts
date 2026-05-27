@@ -31,6 +31,7 @@ export type ShutdownModeType = 'Stopped' | 'Shutdown';
 export type GpuType = {
   manufacturers: string;
   type: string;
+  product?: string;
   amount: number;
   resource?: Record<string, string>;
 };

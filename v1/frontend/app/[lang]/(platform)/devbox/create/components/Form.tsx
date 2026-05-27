@@ -25,7 +25,7 @@ import { useEnvStore } from '@/stores/env';
 
 interface FormProps {
   isEdit: boolean;
-  countGpuInventory: (type: string) => number;
+  countGpuInventory: (type: string, product?: string) => number;
 }
 
 const Form = ({ isEdit, countGpuInventory }: FormProps) => {

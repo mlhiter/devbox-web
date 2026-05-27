@@ -28,6 +28,7 @@ export type userPriceType = {
   nodeports: number;
   gpu?: {
     annotationType: string;
+    product?: string;
     price: number;
     available: number;
     count: number;

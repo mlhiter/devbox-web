@@ -103,7 +103,8 @@ export interface KBDevboxSpec {
     [key: string]: any;
   };
   nodeSelector?: {
-    [gpuNodeSelectorKey]: string;
+    [gpuNodeSelectorKey]?: string;
+    [key: string]: string | undefined;
   };
   state: DevboxStatusEnum;
   tolerations?: KBToleration[];
@@ -154,7 +155,8 @@ export interface KBDevboxSpecV2 {
     [gpuResourceKey]?: string;
   };
   nodeSelector?: {
-    [gpuNodeSelectorKey]: string;
+    [gpuNodeSelectorKey]?: string;
+    [key: string]: string | undefined;
   };
   state: DevboxStatusEnum;
   tolerations?: KBToleration[];

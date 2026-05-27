@@ -5,6 +5,7 @@ import { getK8s } from '@/services/backend/kubernetes';
 import { jsonRes } from '@/services/backend/response';
 import { defaultEnv } from '@/stores/env';
 import type { Env } from '@/types/static';
+import { normalizeGpuSchedulerMode } from '@/constants/devbox';
 import { normalizeStorageDefaultGi } from '@/utils/storage';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
         ingressSecret: process.env.INGRESS_SECRET || defaultEnv.ingressSecret,
         registryAddr: process.env.REGISTRY_ADDR || defaultEnv.registryAddr,
         devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE || defaultEnv.devboxAffinityEnable,
+        gpuSchedulerMode: normalizeGpuSchedulerMode(process.env.GPU_SCHEDULER_MODE),
         squashEnable: process.env.SQUASH_ENABLE || defaultEnv.squashEnable,
         namespace: namespace || defaultEnv.namespace,
         rootRuntimeNamespace: process.env.ROOT_RUNTIME_NAMESPACE || defaultEnv.rootRuntimeNamespace,

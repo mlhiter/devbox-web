@@ -87,8 +87,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { INGRESS_SECRET, DEVBOX_AFFINITY_ENABLE, SQUASH_ENABLE, NFS_STORAGE_CLASS_NAME } =
-      process.env;
+    const {
+      INGRESS_SECRET,
+      DEVBOX_AFFINITY_ENABLE,
+      SQUASH_ENABLE,
+      GPU_SCHEDULER_MODE,
+      NFS_STORAGE_CLASS_NAME
+    } = process.env;
     const templateDefaults = getTemplateDefaults(template.config);
     const finalDevboxForm = {
       ...devboxForm,
@@ -105,7 +110,12 @@ export async function POST(req: NextRequest) {
     const configMap = json2ConfigMap(finalDevboxForm);
 
     // Create Devbox
-    const devbox = json2DevboxV2(finalDevboxForm, DEVBOX_AFFINITY_ENABLE, SQUASH_ENABLE);
+    const devbox = json2DevboxV2(
+      finalDevboxForm,
+      DEVBOX_AFFINITY_ENABLE,
+      SQUASH_ENABLE,
+      GPU_SCHEDULER_MODE
+    );
     const preYamlList = [pvc, configMap].filter((yaml) => yaml !== '');
     if (preYamlList.length > 0) {
       await applyYamlList(preYamlList, 'create');

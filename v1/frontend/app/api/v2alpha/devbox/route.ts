@@ -6,7 +6,7 @@ import { devboxDB } from '@/services/db/init';
 import { sendError, sendValidationError, ErrorType, ErrorCode } from '@/app/api/v2alpha/api-error';
 import { devboxKey } from '@/constants/devbox';
 import { KBDevboxTypeV2 } from '@/types/k8s';
-import { json2Devbox, json2DevboxV2, json2Service, json2Ingress } from '@/utils/json2Yaml';
+import { json2DevboxV2, json2Service, json2Ingress } from '@/utils/json2Yaml';
 import { ProtocolType } from '@/types/devbox';
 import { RequestSchema, nanoid } from './schema';
 import { getRegionUid } from '@/utils/env';
@@ -551,7 +551,7 @@ export async function POST(req: NextRequest) {
     }
 
     const resourceConfig = convertResourceConfig(devboxForm.quota);
-    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT } = process.env;
+    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, GPU_SCHEDULER_MODE } = process.env;
     const devbox = json2DevboxV2(
       {
         ...devboxForm,
@@ -564,7 +564,8 @@ export async function POST(req: NextRequest) {
         env: devboxForm.env || []
       },
       DEVBOX_AFFINITY_ENABLE,
-      STORAGE_LIMIT
+      STORAGE_LIMIT,
+      GPU_SCHEDULER_MODE
     );
 
     await Promise.all([
