@@ -32,6 +32,10 @@ pnpm ts-lint
 git diff --check
 ```
 
+For local runtime smoke checks, use `pnpm dev` on `localhost:3108`. Use
+`pnpm dev:desktop` only when checking the Sealos Desktop wrapper flow that
+expects `localhost:3000`.
+
 The package has no `test` script as of 2026-05-21, so generic test autodetection
 that runs `npm test` will fail. Do not report that as a product regression; call
 out the missing test script separately.
