@@ -17,10 +17,9 @@ const (
 	InsecureRegistry            = true
 	PauseContainerDuringCommit  = false
 
-	AnnotationKeyNamespace               = "namespace"
-	AnnotationKeyImageName               = "image.name"
-	AnnotationImageFromValue             = "true"
-	DevboxOptionsRemoveBaseImageTopLayer = true
+	AnnotationKeyNamespace   = "namespace"
+	AnnotationKeyImageName   = "image.name"
+	AnnotationImageFromValue = "true"
 
 	SnapshotLabelPrefix  = "containerd.io/snapshot/devbox-"
 	ContainerLabelPrefix = "devbox.sealos.io/"

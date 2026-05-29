@@ -2,6 +2,7 @@ package commit
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/containerd/nerdctl/v2/pkg/imgutil/dockerconfigresolver"
 )
@@ -10,6 +11,12 @@ import (
 // nerdctl login fails for HTTPS registries on port 443 when the registry omits the port in
 // WWW-Authenticate (acArg host vs host:443 mismatch); storing credentials directly avoids that.
 func registerRegistryCredentials(registryAddr, username, password string) error {
+	registryAddr = strings.TrimSpace(registryAddr)
+	username = strings.TrimSpace(username)
+	if registryAddr == "" || username == "" {
+		return nil
+	}
+
 	registryURL, err := dockerconfigresolver.Parse(registryAddr)
 	if err != nil {
 		return err
