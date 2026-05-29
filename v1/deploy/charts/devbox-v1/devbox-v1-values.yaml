@@ -34,15 +34,16 @@ frontend:
     documentUrlEn: https://sealos.io/docs/overview/intro
     privacyUrlZh: https://sealos.run/docs/msa/privacy-policy
     privacyUrlEn: https://sealos.io/docs/msa/privacy-policy
-    gpuEnable: "true"
+    gpuEnable: "false"
+    gpuSchedulerMode: "native"
     squashEnable: "false"
     devboxAffinityEnable: "true"
     enableImportFeature: "true"
     enableWebideFeature: "true"
     enabledIDEs: ""
     enableAdvancedEnvAndConfigmap: "true"
-    enableAdvancedNfs: "true"
-    enableAdvancedSharedMemory: "true"
+    enableAdvancedNfs: "false"
+    enableAdvancedSharedMemory: "false"
     cpuSlideMarkList: "2,4,8,16,32"
     memorySlideMarkList: "4,8,16,32,64"
     storageDefault: "20"

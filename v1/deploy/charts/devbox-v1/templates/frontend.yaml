@@ -163,6 +163,10 @@ spec:
         - name: CUSTOM_SCRIPTS
           value: {{ . | quote }}
         {{- end }}
+        {{- with .Values.frontend.env.gpuSchedulerMode }}
+        - name: GPU_SCHEDULER_MODE
+          value: {{ . | quote }}
+        {{- end }}
         securityContext:
           runAsNonRoot: true
           runAsUser: 1001

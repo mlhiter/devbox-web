@@ -62,7 +62,8 @@ frontend:
     monitorUrl: http://launchpad-monitor.sealos.svc.cluster.local:8428
     accountUrl: http://account-service.account-system.svc.cluster.local:2333
     currencySymbol: shellCoin
-    gpuEnable: "true"
+    gpuEnable: "false"
+    gpuSchedulerMode: "native"
     squashEnable: "false"
     devboxAffinityEnable: "true"
     enableImportFeature: "true"
