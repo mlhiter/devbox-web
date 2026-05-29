@@ -91,6 +91,7 @@ export interface DevboxEditTypeV2 {
   envs?: Array<{ key: string; value: string }>;
   configMaps?: DevboxConfigMapType[];
   volumes?: DevboxVolumeType[];
+  mergeBaseImageTopLayer?: boolean;
 }
 
 export interface DevboxStatusMapType {

@@ -66,6 +66,7 @@ export interface KBDevboxSpecV2 {
   config: object;
   image: string;
   templateID: string;
+  mergeBaseImageTopLayer?: boolean;
   network: {
     type: 'NodePort' | 'Tailnet' | 'SSHGate'; // devbox 2.5 add SSHGate
     extraPorts: {

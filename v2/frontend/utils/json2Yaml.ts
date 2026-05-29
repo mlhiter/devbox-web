@@ -43,6 +43,9 @@ export const json2Devbox = (
       ...(!!data.gpu?.type ? { runtimeClassName: 'nvidia' } : {}),
       templateID: data.templateUid,
       image: data.image,
+      ...(data.mergeBaseImageTopLayer !== undefined
+        ? { mergeBaseImageTopLayer: data.mergeBaseImageTopLayer }
+        : {}),
       config: produce(parseTemplateConfig(data.templateConfig), (draft) => {
         draft.appPorts = data.networks.map((item) => ({
           port: str2Num(item.port),

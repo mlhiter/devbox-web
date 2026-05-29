@@ -72,6 +72,9 @@ export const RequestSchema = z
       description:
         'Memory in MB, it is recommended to use options like 2048, 4096, 8192, 16384, 32768, representing 2G, 4G, 8G, 16G, 32G'
     }),
+    mergeBaseImageTopLayer: z.boolean().optional().default(true).openapi({
+      description: 'Merge the base image top layer into the Devbox snapshot on creation'
+    }),
     gpu: GpuSchema.optional().openapi({
       description: 'GPU configuration, usually empty'
     }),

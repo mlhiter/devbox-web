@@ -12,6 +12,13 @@ import { patchYamlList } from '@/utils/tools';
 
 export const dynamic = 'force-dynamic';
 
+const omitMergeBaseImageTopLayer = (formData: DevboxEditTypeV2): DevboxEditTypeV2 => {
+  const editableFormData = { ...formData };
+  delete editableFormData.mergeBaseImageTopLayer;
+
+  return editableFormData;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const { oldFormData, newFormData } = (await req.json()) as {
@@ -19,11 +26,14 @@ export async function POST(req: NextRequest) {
       newFormData: DevboxEditTypeV2;
     };
 
-    const newYamlList = generateYamlList(newFormData, {
+    const oldEditableFormData = omitMergeBaseImageTopLayer(oldFormData);
+    const newEditableFormData = omitMergeBaseImageTopLayer(newFormData);
+
+    const newYamlList = generateYamlList(newEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
       ingressSecret: process.env.INGRESS_SECRET!
     });
-    const oldYamlList = generateYamlList(oldFormData, {
+    const oldYamlList = generateYamlList(oldEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
       ingressSecret: process.env.INGRESS_SECRET!
     });

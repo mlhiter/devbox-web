@@ -135,6 +135,9 @@ export const RequestSchema = z.object({
   }),
   autostart: z.boolean().optional().default(false).openapi({
     description: 'Auto start devbox after creation (defaults to false)'
+  }),
+  mergeBaseImageTopLayer: z.boolean().optional().default(true).openapi({
+    description: 'Merge the base image top layer into the Devbox snapshot on creation'
   })
 });
 

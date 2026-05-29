@@ -84,7 +84,8 @@ export const defaultDevboxEditValueV2: DevboxEditTypeV2 = {
   networks: [],
   envs: [],
   configMaps: [],
-  volumes: []
+  volumes: [],
+  mergeBaseImageTopLayer: true
 };
 
 // TODO: should delete this map,we don not need this in backend
