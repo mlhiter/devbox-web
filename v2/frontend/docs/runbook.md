@@ -33,15 +33,10 @@ provided. Explicit `http://` registry endpoints are rejected.
 
 ```bash
 pnpm dev
-pnpm dev:desktop
 pnpm build
 pnpm ts-lint
 pnpm gen-client
 ```
-
-`pnpm dev` listens on `localhost:3108` to avoid local port 3000 collisions with
-other Codex/Browser development tools. Use `pnpm dev:desktop` only when the
-Sealos Desktop wrapper or local shortcut expects `localhost:3000`.
 
 There is no `test` script in `package.json` as of 2026-05-21. Use
 `pnpm ts-lint` for focused type verification unless a task provides another test

@@ -36,21 +36,7 @@
 
       ![image-20240423105724369](https://raw.githubusercontent.com/mlhiter/typora-images/master/202404231101028.png)
 
-3. Start the local dev server.
-
-   ```bash
-   pnpm dev
-   ```
-
-   This listens on `localhost:3108` by default to avoid local port 3000
-   collisions with other development tools. If you need the Sealos Desktop
-   wrapper that expects `localhost:3000`, use:
-
-   ```bash
-   pnpm dev:desktop
-   ```
-
-4. After that,have your own `test 3000 `page
+3. After that,have your own `test 3000 `page
 
    > Why you should have that?
    >
