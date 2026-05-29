@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	baseImageBusyBox = "docker.io/library/busybox:latest"
-	baseImageNginx   = "docker.io/library/nginx:latest"
-	baseImageAlpine  = "docker.io/library/alpine:latest"
-	testStorageLimit = "10Gi"
+	baseImageBusyBox          = "docker.io/library/busybox:latest"
+	baseImageNginx            = "docker.io/library/nginx:latest"
+	baseImageAlpine           = "docker.io/library/alpine:latest"
+	testStorageLimit          = "10Gi"
+	testAllocatedStorageLimit = "11Gi"
 )
 
 func requireContainerdTestEnv(t *testing.T) {
@@ -97,7 +98,39 @@ func TestCreateContainer(t *testing.T) {
 		t.Fatalf("GetContainerAnnotations failed: %v", err)
 	}
 	t.Logf("annotations: %+v", annotations)
-	assert.Equal(t, testStorageLimit, annotations["devbox.sealos.io/storage-limit"])
+	assert.Equal(t, testAllocatedStorageLimit, annotations["devbox.sealos.io/storage-limit"])
+}
+
+func TestResolveStorageLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit string
+		want  string
+	}{
+		{
+			name:  "adds storage redundancy",
+			limit: testStorageLimit,
+			want:  testAllocatedStorageLimit,
+		},
+		{
+			name:  "keeps empty limit omitted",
+			limit: "",
+			want:  "",
+		},
+		{
+			name:  "preserves invalid values for existing containerd behavior",
+			limit: "bad-limit",
+			want:  "bad-limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveStorageLimit(tt.limit); got != tt.want {
+				t.Fatalf("resolveStorageLimit() = %q, want %q", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestCreateContainerWithoutStorageLimit(t *testing.T) {
