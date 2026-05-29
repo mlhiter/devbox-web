@@ -12,13 +12,15 @@ interface StatusTagProps {
   className?: string;
   isShutdown?: boolean;
   isSSHGate?: boolean;
+  tooltip?: string;
 }
 
 const StatusTag = ({
   status,
   isShutdown = false,
   className,
-  isSSHGate = false
+  isSSHGate = false,
+  tooltip
 }: StatusTagProps) => {
   const label = status?.label;
   const t = useTranslations();
@@ -33,6 +35,18 @@ const StatusTag = ({
         <div className="flex flex-col">
           <span className={cn('text-sm/5 font-medium text-zinc-900', className)}>{t(label)}</span>
         </div>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex cursor-pointer items-center">
+                <CircleHelp className="h-3 w-3 text-emerald-600" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="w-[380px] p-4 break-words" side="bottom">
+              <span className="text-xs/[16px] tracking-[0.048px] text-zinc-500">{tooltip}</span>
+            </TooltipContent>
+          </Tooltip>
+        )}
         {isShutdown && !isSSHGate && (
           <Tooltip>
             <TooltipTrigger asChild>

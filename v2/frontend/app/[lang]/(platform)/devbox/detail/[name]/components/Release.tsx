@@ -270,7 +270,18 @@ const Release = () => {
       {
         title: t('status'),
         key: 'status',
-        render: (item: DevboxVersionListItemType) => <DevboxStatusTag status={item.status} />
+        render: (item: DevboxVersionListItemType) => (
+          <DevboxStatusTag
+            status={item.status}
+            tooltip={
+              item.status.value === DevboxReleaseStatusEnum.Pending
+                ? t('release_pending_tip')
+                : item.status.value === DevboxReleaseStatusEnum.Failed
+                  ? t('release_failed_tip')
+                  : undefined
+            }
+          />
+        )
       },
       {
         title: t('create_time'),

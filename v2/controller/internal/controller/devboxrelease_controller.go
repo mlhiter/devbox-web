@@ -43,6 +43,8 @@ type DevboxreleaseReconciler struct {
 // Kubebuilder scaffold naming while preserving the existing business type.
 type DevBoxReleaseReconciler = DevboxreleaseReconciler
 
+const devBoxReleaseTimeout = 10 * time.Minute
+
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxreleases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxreleases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=devbox.sealos.io,resources=devboxreleases/finalizers,verbs=update
@@ -120,6 +122,34 @@ func (r *DevboxreleaseReconciler) Reconcile(
 			"version",
 			devboxRelease.Spec.Version,
 		)
+		return ctrl.Result{}, nil
+	}
+
+	if isDevBoxReleaseTimedOut(devboxRelease, time.Now()) {
+		logger.Info(
+			"DevBoxRelease timed out",
+			"devbox",
+			devboxRelease.Spec.DevboxName,
+			"devboxRelease",
+			devboxRelease.Name,
+			"version",
+			devboxRelease.Spec.Version,
+			"timeout",
+			devBoxReleaseTimeout,
+		)
+		if err := r.markDevBoxReleaseFailed(ctx, devboxRelease); err != nil {
+			logger.Error(
+				err,
+				"Failed to mark timed out DevBoxRelease as failed",
+				"devbox",
+				devboxRelease.Spec.DevboxName,
+				"devboxRelease",
+				devboxRelease.Name,
+				"version",
+				devboxRelease.Spec.Version,
+			)
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -211,18 +241,7 @@ func (r *DevboxreleaseReconciler) Reconcile(
 				devboxRelease.Spec.Version,
 			)
 			// Update status to failed with retry
-			_ = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				latestRelease := &devboxv1alpha2.DevBoxRelease{}
-				if err := r.Get(
-					ctx,
-					client.ObjectKeyFromObject(devboxRelease),
-					latestRelease,
-				); err != nil {
-					return err
-				}
-				latestRelease.Status.Phase = devboxv1alpha2.DevBoxReleasePhaseFailed
-				return r.Status().Update(ctx, latestRelease)
-			})
+			_ = r.markDevBoxReleaseFailed(ctx, devboxRelease)
 			return ctrl.Result{}, err
 		}
 		logger.Info(
@@ -323,6 +342,38 @@ func (r *DevboxreleaseReconciler) Reconcile(
 		devboxRelease.Spec.Version,
 	)
 	return ctrl.Result{}, nil
+}
+
+func isDevBoxReleaseTimedOut(
+	devboxRelease *devboxv1alpha2.DevBoxRelease,
+	now time.Time,
+) bool {
+	if devboxRelease.CreationTimestamp.IsZero() {
+		return false
+	}
+	if devboxRelease.Status.Phase != "" &&
+		devboxRelease.Status.Phase != devboxv1alpha2.DevBoxReleasePhasePending {
+		return false
+	}
+	return now.Sub(devboxRelease.CreationTimestamp.Time) > devBoxReleaseTimeout
+}
+
+func (r *DevboxreleaseReconciler) markDevBoxReleaseFailed(
+	ctx context.Context,
+	devboxRelease *devboxv1alpha2.DevBoxRelease,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latestRelease := &devboxv1alpha2.DevBoxRelease{}
+		if err := r.Get(
+			ctx,
+			client.ObjectKeyFromObject(devboxRelease),
+			latestRelease,
+		); err != nil {
+			return err
+		}
+		latestRelease.Status.Phase = devboxv1alpha2.DevBoxReleasePhaseFailed
+		return r.Status().Update(ctx, latestRelease)
+	})
 }
 
 func (r *DevboxreleaseReconciler) Release(
