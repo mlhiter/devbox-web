@@ -24,6 +24,11 @@ import { calculateUptime, formatPodTime } from '@/utils/tools';
 import { devboxRemarkKey, gpuNodeSelectorKey, gpuResourceKey } from '../constants/devbox';
 import { cpuFormatToM, memoryFormatToMi } from '@labring/sealos-shared-sdk';
 
+const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
+
+const normalizeStorageLimit = (storageLimit?: string) =>
+  storageLimitOptions.includes(storageLimit || '') ? storageLimit : '10Gi';
+
 export const adaptDevboxListItemV2 = ([devbox, template]: [
   KBDevboxTypeV2,
   {
@@ -149,6 +154,9 @@ export const adaptDevboxDetailV2 = ([
     createTime: devbox.metadata.creationTimestamp,
     cpu: cpuFormatToM(devbox.spec.resource.cpu),
     memory: memoryFormatToMi(devbox.spec.resource.memory),
+    storageLimit: normalizeStorageLimit(
+      devbox.spec.storageLimit || devbox.spec.resource['ephemeral-storage']
+    ),
     gpu: {
       type: devbox.spec.nodeSelector?.[gpuNodeSelectorKey] || '',
       amount: Number(devbox.spec.resource[gpuResourceKey] || 0),

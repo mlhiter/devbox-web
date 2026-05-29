@@ -9,11 +9,17 @@ import { getUserNamespace } from './user';
 const getConfigMapFileName = (path: string, fallbackId: string) =>
   path.split('/').filter(Boolean).pop() || `config-${fallbackId}`;
 
+const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
+
+const normalizeStorageLimit = (storageLimit?: string) =>
+  storageLimitOptions.includes(storageLimit || '') ? storageLimit : '10Gi';
+
 export const json2Devbox = (
   data: Omit<json2DevboxData, 'templateRepositoryUid'>,
   devboxAffinityEnable: string = 'true',
   storageLimit: string = '10Gi'
 ) => {
+  const resolvedStorageLimit = normalizeStorageLimit(data.storageLimit || storageLimit);
   const gpuMap = !!data.gpu?.type
     ? {
         nodeSelector: {
@@ -38,6 +44,7 @@ export const json2Devbox = (
       resource: {
         cpu: `${str2Num(Math.floor(data.cpu))}m`,
         memory: `${str2Num(data.memory)}Mi`,
+        'ephemeral-storage': resolvedStorageLimit,
         ...(!!data.gpu?.type ? { [gpuResourceKey]: data.gpu.amount } : {})
       },
       ...(!!data.gpu?.type ? { runtimeClassName: 'nvidia' } : {}),
@@ -126,7 +133,7 @@ export const json2Devbox = (
       state: 'Running',
       ...gpuMap,
       runtimeClassName: 'devbox-runtime',
-      storageLimit: storageLimit // 10Gi default
+      storageLimit: resolvedStorageLimit
     }
   };
   if (devboxAffinityEnable === 'true') {

@@ -41,7 +41,7 @@ data:
     devbox:
       createDefaults:
         image: "ghcr.io/labring-actions/devbox-base-expt/sandbox-v1:latest-en-us-amd64"
-        storageLimit: "1Gi"
+        storageLimit: "10Gi"
         resource:
           cpu: "200m"
           memory: "512Mi"
