@@ -9,6 +9,17 @@ import (
 
 const storageLimitRedundancyDivisor int64 = 10
 
+var userStorageLimitBytes = newUserStorageLimitBytes("10Gi", "20Gi", "30Gi", "40Gi", "50Gi")
+
+func newUserStorageLimitBytes(limits ...string) map[int64]struct{} {
+	values := make(map[int64]struct{}, len(limits))
+	for _, limit := range limits {
+		quantity := resource.MustParse(limit)
+		values[quantity.Value()] = struct{}{}
+	}
+	return values
+}
+
 func AllocatedStorageLimitBytes(storageLimit string) (int64, error) {
 	trimmed := strings.TrimSpace(storageLimit)
 	if trimmed == "" {
@@ -22,6 +33,9 @@ func AllocatedStorageLimitBytes(storageLimit string) (int64, error) {
 
 	value := quantity.Value()
 	if value <= 0 {
+		return value, nil
+	}
+	if _, ok := userStorageLimitBytes[value]; !ok {
 		return value, nil
 	}
 

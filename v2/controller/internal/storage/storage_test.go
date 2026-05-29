@@ -34,6 +34,21 @@ func TestAllocatedStorageLimitBytes(t *testing.T) {
 			want:  "22Gi",
 		},
 		{
+			name:  "keeps allocated default limit idempotent",
+			limit: "11Gi",
+			want:  "11Gi",
+		},
+		{
+			name:  "keeps allocated maximum limit idempotent",
+			limit: "55Gi",
+			want:  "55Gi",
+		},
+		{
+			name:  "keeps non-user-facing values unchanged",
+			limit: "5Gi",
+			want:  "5Gi",
+		},
+		{
 			name:    "returns parse errors",
 			limit:   "bad-limit",
 			wantErr: true,
