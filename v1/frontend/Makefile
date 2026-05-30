@@ -3,6 +3,7 @@ SERVICE_NAME=sealos-devbox
 IMG ?= $(SERVICE_NAME):latest
 PNPM ?= pnpm
 PNPM_INSTALL_FLAGS ?= --frozen-lockfile
+NODE_OPTIONS ?= --max-old-space-size=4096
 
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
@@ -52,7 +53,7 @@ verify: ## Run the standard frontend verification pipeline.
 
 .PHONY: build
 build: ## Build desktop-frontend binary.
-	$(PNPM) run build
+	NODE_OPTIONS="$(NODE_OPTIONS)" $(PNPM) run build
 
 .PHONY: dev
 dev: ## Run the frontend in development mode.
