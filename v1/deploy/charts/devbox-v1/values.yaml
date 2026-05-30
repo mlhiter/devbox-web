@@ -1,5 +1,7 @@
 cloudDomain: "127.0.0.1.nip.io"
 cloudPort: ""
+httpPort: ""
+disableHttps: false
 certSecretName: "wildcard-cert"
 
 registry:
@@ -61,6 +63,7 @@ frontend:
     privacyUrlEn: https://sealos.io/docs/msa/privacy-policy
     monitorUrl: http://launchpad-monitor.sealos.svc.cluster.local:8428
     accountUrl: http://account-service.account-system.svc.cluster.local:2333
+    appLaunchpadUrl: http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha
     currencySymbol: shellCoin
     gpuEnable: "false"
     gpuSchedulerMode: "native"

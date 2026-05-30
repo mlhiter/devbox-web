@@ -1,0 +1,39 @@
+CHECK_TIME 2026-05-29T19:52:34+00:00
+
+NODES
+NAME      STATUS   ROLES           AGE    VERSION    INTERNAL-IP      EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION       CONTAINER-RUNTIME
+pve-272   Ready    control-plane   136m   v1.28.15   192.168.12.161   <none>        Ubuntu 22.04.3 LTS   5.15.0-179-generic   containerd://1.7.27-labring.1
+
+DEVBOX_FRONTEND_LEGACY_NAMESPACE
+Error from server (NotFound): namespaces "devbox-frontend" not found
+
+DEVBOX_SYSTEM_DEPLOYMENTS
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE    CONTAINERS        IMAGES                                             SELECTOR
+devbox-controller-manager   1/1     1            1           79m    manager           ghcr.io/sealos-apps/devbox-v1-controller:main      app.kubernetes.io/name=devbox,control-plane=controller-manager
+devbox-frontend             1/1     1            1           79m    devbox-frontend   ghcr.io/sealos-apps/devbox-v1-frontend:main        app=devbox-frontend
+devbox-service              3/3     3            3           102m   devbox-service    ghcr.io/labring/sealos-devbox-service:v5.1.2-rc5   app=devbox-service
+
+DEVBOX_FRONTEND_TLS_ENV
+      - env:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
+        - name: DOCUMENT_URL_ZH
+
+DEVBOX_CR
+NAME           STATE     NETWORKTYPE   NODEPORT   PHASE
+codex-go-272   Stopped   NodePort      44282      Stopped
+
+DEVBOX_RELEASES
+NAME                  DEVBOXNAME     NEWTAG   PHASE     ORIGINALIMAGE
+codex-go-272-v1-272   codex-go-272   v1-272   Success   hub.192.168.12.161.nip.io/ns-admin/codex-go-272:z2h9j-2026-05-29-193030
+
+APP_RESOURCES_BY_NAME
+deployment.apps/codex-go-272-release-vhajyi   1/1     1            1           65s   codex-go-272-release-vhajyi   hub.192.168.12.161.nip.io/ns-admin/codex-go-272:v1-272   app=codex-go-272-release-vhajyi
+service/codex-go-272-release-vhajyi-nzsvboeytgzz   ClusterIP   10.194.201.129   <none>        8080/TCP       65s   app=codex-go-272-release-vhajyi
+pod/codex-go-272-release-vhajyi-788866756b-vgwvw   1/1     Running   0          65s   10.0.0.59   pve-272   <none>           <none>
+
+APP_RESOURCES_BY_DEVBOX_LABEL
+NAME                                          READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS                    IMAGES                                                   SELECTOR
+deployment.apps/codex-go-272-release-vhajyi   1/1     1            1           65s   codex-go-272-release-vhajyi   hub.192.168.12.161.nip.io/ns-admin/codex-go-272:v1-272   app=codex-go-272-release-vhajyi
+
+PODS_NOT_RUNNING

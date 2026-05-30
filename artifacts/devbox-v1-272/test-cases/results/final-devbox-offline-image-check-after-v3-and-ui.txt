@@ -1,0 +1,16 @@
+CHECK_TIME 2026-05-29T19:53:41+00:00
+ALLOWED_PREFIXES sealos.hub:5000/ hub.192.168.12.161.nip.io/
+
+DEVBOX_RELEASE_IMAGES
+codex-go-272-v1-272 hub.192.168.12.161.nip.io/ns-admin/codex-go-272:z2h9j-2026-05-29-193030
+
+APP_IMAGES_BY_DEVBOX_LABEL
+codex-go-272-release-vhajyi hub.192.168.12.161.nip.io/ns-admin/codex-go-272:v1-272
+
+RUNTIME_CACHE_IMAGES
+hub.192.168.12.161.nip.io/ns-admin/codex-go-272                   v1-272                                                        62fcd9578d8bd       231MB
+hub.192.168.12.161.nip.io/ns-admin/codex-go-272                   z2h9j-2026-05-29-193030                                       62fcd9578d8bd       231MB
+hub.192.168.12.161.nip.io/ns-admin/codex-go-272                   xr5sw-2026-05-29-191905                                       25df23d92ad4d       231MB
+sealos.hub:5000/labring-actions/devbox-runtime-images/go-1.22.5   2026-5-stable-zh-cn                                           f7def850cc899       231MB
+
+SCOPED_VIOLATIONS

@@ -1,0 +1,10 @@
+2026-05-29T19:31:17+00:00
+codex-go-272   Stopped   Stopped   44282
+NAME                  DEVBOXNAME     NEWTAG   PHASE     ORIGINALIMAGE
+codex-go-272-v1-272   codex-go-272   v1-272   Success   hub.192.168.12.161.nip.io/ns-admin/codex-go-272:z2h9j-2026-05-29-193030
+    name: codex-go-272-v1-272
+      name: codex-go-272
+    newTag: v1-272
+    originalImage: hub.192.168.12.161.nip.io/ns-admin/codex-go-272:z2h9j-2026-05-29-193030
+    phase: Success
+---

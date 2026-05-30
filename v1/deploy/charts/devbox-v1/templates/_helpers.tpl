@@ -6,8 +6,39 @@
 {{- printf "%s.%s" (default "devbox" .Values.ingress.hostPrefix) .Values.cloudDomain -}}
 {{- end -}}
 
+{{- define "devbox-v1.scheme" -}}
+{{- $disableHttps := .Values.disableHttps -}}
+{{- if eq (toString $disableHttps) "true" -}}http{{- else -}}https{{- end -}}
+{{- end -}}
+
+{{- define "devbox-v1.externalPort" -}}
+{{- $scheme := include "devbox-v1.scheme" . -}}
+{{- $port := toString .Values.cloudPort -}}
+{{- if eq $scheme "http" -}}
+{{- $port = toString .Values.httpPort -}}
+{{- end -}}
+{{- if or (and (eq $scheme "https") (or (eq $port "") (eq $port "443"))) (and (eq $scheme "http") (or (eq $port "") (eq $port "80"))) -}}
+{{- "" -}}
+{{- else -}}
+{{- $port -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "devbox-v1.externalPortSuffix" -}}
+{{- $port := include "devbox-v1.externalPort" . -}}
+{{- if $port -}}:{{ $port }}{{- end -}}
+{{- end -}}
+
+{{- define "devbox-v1.rootExternalOrigin" -}}
+{{- include "devbox-v1.scheme" . -}}://{{ .Values.cloudDomain }}{{ include "devbox-v1.externalPortSuffix" . }}
+{{- end -}}
+
+{{- define "devbox-v1.wildcardExternalOrigin" -}}
+{{- include "devbox-v1.scheme" . -}}://*.{{ .Values.cloudDomain }}{{ include "devbox-v1.externalPortSuffix" . }}
+{{- end -}}
+
 {{- define "devbox-v1.frontendExternalURL" -}}
-{{- printf "https://%s" (include "devbox-v1.frontendHost" .) -}}{{- if .Values.cloudPort -}}:{{ .Values.cloudPort }}{{- end -}}
+{{- include "devbox-v1.scheme" . -}}://{{ include "devbox-v1.frontendHost" . }}{{ include "devbox-v1.externalPortSuffix" . }}
 {{- end -}}
 
 {{- define "devbox-v1.frontendImage" -}}

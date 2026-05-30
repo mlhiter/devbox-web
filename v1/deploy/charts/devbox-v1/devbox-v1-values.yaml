@@ -1,3 +1,7 @@
+cloudPort: ""
+httpPort: ""
+disableHttps: false
+
 platform:
   databaseProvider: "cockroachdb"
 

@@ -1,20 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-timestamp() {
-  date +"%Y-%m-%d %T"
-}
+load_cloud_tools_or_exit() {
+  local tools_file="/root/.sealos/cloud/scripts/tools.sh"
+  local required_functions=(
+    ensure_global_values_ready_for_component
+    global_http_disable_https
+    global_http_external_url
+    read_account_service_name
+    info
+    warn
+    error
+    fetch_configmap_data_key
+    read_cert_tls_reject_unauthorized
+    read_jwt_internal
+    read_yaml_file_path
+  )
+  local missing_functions=()
+  local function_name
 
-info() {
-  local flag
-  flag="$(timestamp)"
-  echo -e "\033[36m INFO [$flag] >> $* \033[0m"
-}
+  if [ ! -f "$tools_file" ]; then
+    cat >&2 <<'EOF'
+错误：未找到 /root/.sealos/cloud/scripts/tools.sh，当前组件镜像无法继续执行。
 
-warn() {
-  local flag
-  flag="$(timestamp)"
-  echo -e "\033[33m WARN [$flag] >> $* \033[0m"
+请先回到当前安装包目录，执行对应命令同步 values + tools：
+  Pro 安装包：./sealos-pro.sh sync-config
+  OSS 安装包：./sealos-oss.sh sync-config
+EOF
+    exit 1
+  fi
+
+  # shellcheck source=/dev/null
+  source "$tools_file"
+  for function_name in "${required_functions[@]}"; do
+    if ! declare -f "$function_name" >/dev/null 2>&1; then
+      missing_functions+=("$function_name")
+    fi
+  done
+
+  if [ "${#missing_functions[@]}" -gt 0 ]; then
+    cat >&2 <<EOF
+错误：/root/.sealos/cloud/scripts/tools.sh 版本过旧，缺少配置检测函数，当前组件镜像无法继续执行。
+
+缺少函数：${missing_functions[*]}
+
+请先回到当前安装包目录，执行对应命令同步 values + tools：
+  Pro 安装包：./sealos-pro.sh sync-config
+  OSS 安装包：./sealos-oss.sh sync-config
+EOF
+    exit 1
+  fi
+
+  ensure_global_values_ready_for_component
 }
 
 RELEASE_NAME="${RELEASE_NAME:-devbox-v1}"
@@ -26,6 +63,7 @@ USER_VALUES_FILE="${USER_VALUES_DIR}/devbox-v1-values.yaml"
 GLOBAL_VALUES_FILE="/root/.sealos/cloud/values/global.yaml"
 TOOLS_FILE="${TOOLS_FILE:-/root/.sealos/cloud/scripts/tools.sh}"
 
+load_cloud_tools_or_exit
 if [ -f "${TOOLS_FILE}" ]; then
   # shellcheck source=/dev/null
   source "${TOOLS_FILE}"
@@ -34,12 +72,6 @@ else
   exit 1
 fi
 
-required_tool_functions=(fetch_configmap_data_key read_cert_tls_reject_unauthorized read_jwt_internal read_yaml_file_path)
-for tool_function in "${required_tool_functions[@]}"; do
-  if ! declare -f "${tool_function}" >/dev/null 2>&1; then
-    error "${tool_function} not found in ${TOOLS_FILE}. Please sync latest Sealos tools.sh."
-  fi
-done
 
 get_configmap_data() {
   local namespace=$1
@@ -171,8 +203,15 @@ value_or_default() {
 cloud_domain="$(value_or_default "${cloudDomain:-${CLOUD_DOMAIN:-}}" "$(get_configmap_data sealos-system sealos-config cloudDomain)")"
 cloud_domain="$(value_or_default "${cloud_domain}" "127.0.0.1.nip.io")"
 
-cloud_port="$(value_or_default "${cloudPort:-${CLOUD_PORT:-}}" "$(get_configmap_data sealos-system sealos-config cloudPort)")"
-cert_secret_name="$(value_or_default "${certSecretName:-${CERT_SECRET_NAME:-}}" "wildcard-cert")"
+cloud_port="$(value_or_default "${cloudPort:-${CLOUD_PORT:-}}" "$(read_yaml_file_path '.global.http.httpsPort')")"
+http_port="$(value_or_default "${httpPort:-${HTTP_PORT:-}}" "$(read_yaml_file_path '.global.http.httpPort')")"
+cert_secret_name="$(value_or_default "${certSecretName:-${CERT_SECRET_NAME:-}}" "$(read_yaml_file_path '.global.http.certSecretName')")"
+cert_secret_name="$(value_or_default "${cert_secret_name}" "wildcard-cert")"
+if global_http_disable_https; then
+  disable_https="true"
+else
+  disable_https="false"
+fi
 tls_reject_unauthorized="$(read_cert_tls_reject_unauthorized)"
 
 registry_addr="$(value_or_default "${registryAddr:-${REGISTRY_ADDR:-}}" "$(get_configmap_data sealos-system registry-config REGISTRY_ADDR)")"
@@ -197,21 +236,15 @@ if [ -z "${database_url}" ]; then
 fi
 
 region_uid="$(value_or_default "${regionUid:-${REGION_UID:-}}" "$(get_configmap_data sealos-system sealos-config regionUID)")"
-region_uid="$(value_or_default "${region_uid}" "$(get_desktop_config_value regionUID)")"
 if [ -z "${region_uid}" ]; then
-  if command -v uuidgen >/dev/null 2>&1; then
-    region_uid="$(uuidgen)"
-  else
-    region_uid="$(random_secret)"
-  fi
-  warn "regionUID was not detected; generated ${region_uid}"
+  warn "regionUID was not detected; if you are using features that rely on regionUID, set platform.regionUid in ${USER_VALUES_FILE} or set the regionUID key in the sealos-config ConfigMap."
+  exit 1
 fi
 
 jwt_secret="$(value_or_default "${jwtSecret:-${JWT_SECRET:-}}" "$(read_jwt_internal)")"
-jwt_secret="$(value_or_default "${jwt_secret}" "$(get_desktop_config_value internal)")"
 if [ -z "${jwt_secret}" ]; then
-  jwt_secret="$(random_secret)"
-  warn "jwtSecret was not detected; generated a new value"
+  warn "jwtSecret was not detected; generating random JWT secret. This may cause issues if the frontend is redeployed, as existing tokens will become invalid. It is recommended to set a fixed jwtSecret value in ${USER_VALUES_FILE} or ensure it can be read from the cluster configuration."
+  exit 1
 fi
 
 ensure_user_values_file
@@ -232,6 +265,8 @@ billing_currency="$(value_or_default "${billing_currency}" "cny")"
 helm_set_args=(
   --set-string "cloudDomain=${cloud_domain}"
   --set-string "cloudPort=${cloud_port}"
+  --set-string "httpPort=${http_port}"
+  --set-string "disableHttps=${disable_https}"
   --set-string "certSecretName=${cert_secret_name}"
   --set-string "frontend.env.currencySymbol=${billing_currency}"
   --set-string "registry.addr=${registry_addr}"

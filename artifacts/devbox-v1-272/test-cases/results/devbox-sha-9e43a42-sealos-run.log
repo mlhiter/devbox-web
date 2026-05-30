@@ -1,0 +1,54 @@
+2026-05-29T18:25:58 [34minfo[0m [34mstart to install app in this cluster[0m
+2026-05-29T18:25:58 [34minfo[0m [34mExecuting SyncStatusAndCheck Pipeline in InstallProcessor[0m
+2026-05-29T18:25:58 [34minfo[0m [34mExecuting ConfirmOverrideApps Pipeline in InstallProcessor[0m
+2026-05-29T18:25:58 [34minfo[0m [34mExecuting PreProcess Pipeline in InstallProcessor[0m
+Trying to pull ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:sha-9e43a42...
+Getting image source signatures
+Copying blob sha256:d9c9148c98549c56039d490ad15dc935e561427642cc9ce91fc0a12bde525432
+Copying blob sha256:529f017f7bc03ff52d93990a18d1155c99e7c0826a40b9d8bd86d54cac5c08a7
+Copying blob sha256:311cdf90c3bb9a8882e56ef60aafbf2e2d6b9ea866b3921745f46384386a90b1
+Copying config sha256:70a937eb32073b044ac2b89167c1137ec2ae60176c180ecc24ca29ff6d33c0b2
+Writing manifest to image destination
+Storing signatures
+2026-05-29T18:26:05 [34minfo[0m [34mExecuting pipeline MountRootfs in InstallProcessor.[0m
+2026-05-29T18:26:06 [34minfo[0m [34mExecuting pipeline MirrorRegistry in InstallProcessor.[0m
+2026-05-29T18:26:06 [34minfo[0m [34mExecuting UpgradeIfNeed Pipeline in InstallProcessor[0m
+2026-05-29T18:26:06 [34minfo[0m [34msucceeded install app in this cluster[0m
+2026-05-29T18:26:06 [34minfo[0m [34mno nodes that need to be scaled[0m
+2026-05-29T18:26:06 [34minfo[0m [34musing v1beta3 kubeadm config[0m
+2026-05-29T18:26:06 [34minfo[0m [34m
+      ___           ___           ___           ___       ___           ___
+     /\  \         /\  \         /\  \         /\__\     /\  \         /\  \
+    /::\  \       /::\  \       /::\  \       /:/  /    /::\  \       /::\  \
+   /:/\ \  \     /:/\:\  \     /:/\:\  \     /:/  /    /:/\:\  \     /:/\ \  \
+  _\:\~\ \  \   /::\~\:\  \   /::\~\:\  \   /:/  /    /:/  \:\  \   _\:\~\ \  \
+ /\ \:\ \ \__\ /:/\:\ \:\__\ /:/\:\ \:\__\ /:/__/    /:/__/ \:\__\ /\ \:\ \ \__\
+ \:\ \:\ \/__/ \:\~\:\ \/__/ \/__\:\/:/  / \:\  \    \:\  \ /:/  / \:\ \:\ \/__/
+  \:\ \:\__\    \:\ \:\__\        \::/  /   \:\  \    \:\  /:/  /   \:\ \:\__\
+   \:\/:/  /     \:\ \/__/        /:/  /     \:\  \    \:\/:/  /     \:\/:/  /
+    \::/  /       \:\__\         /:/  /       \:\__\    \::/  /       \::/  /
+     \/__/         \/__/         \/__/         \/__/     \/__/         \/__/
+
+                  Website: https://sealos.io/
+                  Address: github.com/labring/sealos
+                  Version: 5.1.2-rc5-88abb542e
+[0m
+2026-05-29T18:26:06 [34minfo[0m [34mstart to install app in this cluster[0m
+2026-05-29T18:26:06 [34minfo[0m [34mExecuting SyncStatusAndCheck Pipeline in InstallProcessor[0m
+2026-05-29T18:26:06 [34minfo[0m [34mExecuting ConfirmOverrideApps Pipeline in InstallProcessor[0m
+2026-05-29T18:26:06 [34minfo[0m [34mExecuting PreProcess Pipeline in InstallProcessor[0m
+Trying to pull ghcr.io/sealos-apps/devbox-v1-cluster:sha-9e43a42...
+Getting image source signatures
+Copying blob sha256:1f92459bc1547d31587021e3402f7013de782fc24b69554a95936ebeb14b873a
+Copying blob sha256:8d459ca597bcb4ae59752cfbb179b4f9174ee4a78b16515f90a5359a10628bdc
+Copying blob sha256:e93bd5d5c6ab617c66c43afd10edfb5176fb19287e50f76c0731e5ff421c1096
+Copying config sha256:37415190062463decac3fefd252a27aab6326846be90a67ef455d8aa2880f640
+Writing manifest to image destination
+Storing signatures
+2026-05-29T18:26:34 [34minfo[0m [34mExecuting pipeline MountRootfs in InstallProcessor.[0m
+2026-05-29T18:26:35 [34minfo[0m [34mExecuting pipeline MirrorRegistry in InstallProcessor.[0m
+2026-05-29T18:26:35 [34minfo[0m [34mtrying default http mode to sync images to hosts [192.168.12.161:22][0m
+2026-05-29T18:26:49 [34minfo[0m [34mExecuting UpgradeIfNeed Pipeline in InstallProcessor[0m
+[31m ERROR [2026-05-29 18:26:49] >> fetch_configmap_data_key not found in /root/.sealos/cloud/scripts/tools.sh. Please sync latest Sealos tools.sh. [0m
+2026-05-29T18:26:49 [34minfo[0m [34musing v1beta3 kubeadm config[0m
+Error: exit status 1
