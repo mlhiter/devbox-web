@@ -1,4 +1,0 @@
-Created symlink /etc/systemd/system/multi-user.target.wants/cri-shim.service → /etc/systemd/system/cri-shim.service.
-init cri shim success
-error: taint "devbox.sealos.io/node" not found
-node/pve-272 labeled
