@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 
 import {
+  DevboxStatusEnum,
   devboxReleaseStatusMap,
   devboxStatusMap,
   PodStatusEnum,
@@ -29,6 +30,11 @@ const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
 const normalizeStorageLimit = (storageLimit?: string) =>
   storageLimitOptions.includes(storageLimit || '') ? storageLimit : '10Gi';
 
+const toDevboxStatusEnum = (state?: string): DevboxStatusEnum =>
+  Object.values(DevboxStatusEnum).includes(state as DevboxStatusEnum)
+    ? (state as DevboxStatusEnum)
+    : DevboxStatusEnum.Error;
+
 export const adaptDevboxListItemV2 = ([devbox, template]: [
   KBDevboxTypeV2,
   {
@@ -41,6 +47,7 @@ export const adaptDevboxListItemV2 = ([devbox, template]: [
 ]): DevboxListItemTypeV2 => {
   const gpuType = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
   const gpuAmount = devbox.spec.resource[gpuResourceKey];
+  const state = toDevboxStatusEnum(devbox.status.state);
 
   return {
     id: devbox.metadata?.uid || ``,
@@ -48,7 +55,7 @@ export const adaptDevboxListItemV2 = ([devbox, template]: [
     template,
     remark: devbox.metadata?.annotations?.[devboxRemarkKey] || '',
     status: devboxStatusMap[devbox.status.phase] || devboxStatusMap.Error, // use devbox.status.phase to get status
-    state: devbox.spec.state || 'Error',
+    state,
     sshPort:
       devbox.spec.network.type === 'SSHGate' ? 2233 : devbox.status?.network.nodePort || 65535,
     createTime: devbox.metadata.creationTimestamp,
@@ -77,6 +84,7 @@ export const adaptDevboxDetailV2 = ([
     devbox.status?.phase && devboxStatusMap[devbox.status.phase]
       ? devboxStatusMap[devbox.status.phase]
       : devboxStatusMap.Pending;
+  const state = toDevboxStatusEnum(devbox.status.state);
 
   const config = devbox.spec.config as any;
   const devboxName = devbox.metadata.name || 'devbox';
@@ -147,7 +155,7 @@ export const adaptDevboxDetailV2 = ([
     image: template.image,
     iconId: template.templateRepository.iconId || '',
     status: devboxStatusMap[devbox.status.phase] || devboxStatusMap.Error,
-    state: devbox.spec.state || 'Error',
+    state,
     sshPort:
       devbox.spec.network.type === 'SSHGate' ? 2233 : devbox.status?.network.nodePort || 65535,
     isPause: devbox.status.phase === 'Stopped' || devbox.status.phase === 'Shutdown',

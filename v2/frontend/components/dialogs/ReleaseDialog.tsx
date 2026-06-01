@@ -131,7 +131,6 @@ const ReleaseDialog = ({ onClose, onSuccess, devbox, open }: ReleaseDialogProps)
 
           while (Date.now() - startTime < timeout) {
             const devboxDetail = await getDevboxByName(devbox.name);
-            //NOTE: Here we use state not status.value to check if stopped
             if (devboxDetail.state === DevboxStatusEnum.Shutdown) {
               isShutdown = true;
               break;

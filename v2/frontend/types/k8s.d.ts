@@ -30,8 +30,24 @@ export type KBDevboxTypeV2 = {
     //     startedAt: string;
     //   };
     // };
-    state: 'Pending' | 'Running' | 'Stopped' | 'Stopping' | 'Error' | 'Unknown' | 'Shutdown';
-    phase: 'Pending' | 'Running' | 'Stopped' | 'Stopping' | 'Error' | 'Unknown' | 'Shutdown';
+    state:
+      | 'Pending'
+      | 'Running'
+      | 'Paused'
+      | 'Stopped'
+      | 'Stopping'
+      | 'Error'
+      | 'Unknown'
+      | 'Shutdown';
+    phase:
+      | 'Pending'
+      | 'Running'
+      | 'Paused'
+      | 'Stopped'
+      | 'Stopping'
+      | 'Error'
+      | 'Unknown'
+      | 'Shutdown';
     contentID: string; // first item sha of commitRecords
     commitRecords: {
       [contentID: string]: {
