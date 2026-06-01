@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     );
     const ingresses: any = (ingressesResponse.body as { items: any[] }).items;
 
-    ingresses.forEach(async (ingress: any) => {
+    for (const ingress of ingresses) {
       const annotationsIngressClass =
         ingress.metadata?.annotations?.['kubernetes.io/ingress.class'];
       const specIngressClass = ingress.spec?.ingressClassName;
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           );
         }
       }
-    });
+    }
 
     if (!onlyIngress) {
       const patchData: any = { spec: { state: 'Running' } };
