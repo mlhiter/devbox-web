@@ -144,6 +144,7 @@
   "devbox_name_required": "DevBox name cannot be empty",
   "devbox_pause_save_change": "DevBox will pause during release. Save all changes first.",
   "devbox_ready": "DevBox is ready",
+  "devbox_shutdown_timeout": "Auto-shutdown failed. Release requires DevBox to be stopped. Please retry",
   "devbox_shutdown_notice1": "Suspend port billing in cost-saving shutdown mode.",
   "devbox_shutdown_notice2": "Due to the reclaiming of port resources, after startup, the <black>public access port will be reassigned. You can click the IDE icon (or reconfigure the SSH connection information)</black> to update to the latest connection information.",
   "devbox_shutdown_notice3": "Due to the reclaiming of fixed public IP addresses, <black>the fixed public IP address may change after a restart,</black> but this will not affect the private IP address. If the instance was bound to an elastic public IP address before shutdown, the IP address will remain unchanged after the restart.",
