@@ -95,6 +95,8 @@ spec:
           value: {{ .Values.frontend.env.squashEnable | quote }}
         - name: ACCOUNT_URL
           value: {{ .Values.frontend.env.accountUrl | quote }}
+        - name: APP_LAUNCHPAD_URL
+          value: {{ .Values.frontend.env.appLaunchpadUrl | quote }}
         - name: ROOT_RUNTIME_NAMESPACE
           value: {{ .Values.controller.namespace | quote }}
         - name: INGRESS_DOMAIN
@@ -161,6 +163,10 @@ spec:
         {{- end }}
         {{- with .Values.frontend.env.customScripts }}
         - name: CUSTOM_SCRIPTS
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.frontend.env.gpuSchedulerMode }}
+        - name: GPU_SCHEDULER_MODE
           value: {{ . | quote }}
         {{- end }}
         securityContext:

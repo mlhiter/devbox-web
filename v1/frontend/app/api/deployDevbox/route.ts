@@ -161,8 +161,13 @@ export async function POST(req: NextRequest) {
       }
     };
 
+    const appLaunchpadUrl = (
+      process.env.APP_LAUNCHPAD_URL ||
+      `https://applaunchpad.${process.env.SEALOS_DOMAIN}/api/v1alpha`
+    ).replace(/\/$/, '');
+
     const fetchResponse = await fetch(
-      `https://applaunchpad.${process.env.SEALOS_DOMAIN}/api/v1alpha/createApp`,
+      `${appLaunchpadUrl}/createApp`,
       {
         method: 'POST',
         headers: {

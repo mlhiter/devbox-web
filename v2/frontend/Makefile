@@ -3,6 +3,7 @@ SERVICE_NAME ?= ghcr.io/sealos-apps/devbox-v2-frontend
 IMG ?= $(SERVICE_NAME):latest
 PNPM ?= pnpm
 PNPM_INSTALL_FLAGS ?= --frozen-lockfile
+NODE_OPTIONS ?= --max-old-space-size=4096
 CONTAINER_TOOL ?= docker
 DOCKERFILE ?= Dockerfile
 DOCKER_BUILD_ARGS ?=
@@ -57,7 +58,7 @@ verify: ## Run the standard frontend verification pipeline.
 
 .PHONY: build
 build: ## Build frontend application.
-	$(PNPM) run build
+	NODE_OPTIONS="$(NODE_OPTIONS)" $(PNPM) run build
 
 .PHONY: dev
 dev: ## Run the frontend in development mode.
