@@ -59,7 +59,6 @@ type DevboxReconciler struct {
 	PodMatchers []matcher.PodMatcher
 
 	DebugMode                 bool
-	MergeBaseImageTopLayer    bool
 	EnableBlockIOResource     bool
 	StartupConfigMapName      string
 	StartupConfigMapNamespace string

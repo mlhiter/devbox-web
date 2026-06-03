@@ -57,8 +57,6 @@ type CommitterImpl struct {
 	registryAddr     string
 	registryUsername string
 	registryPassword string
-	// Merge base image layers control
-	mergeBaseImageTopLayer bool
 	// Configurable via flags
 	devboxSnapshotter string
 	networkMode       string
@@ -77,9 +75,6 @@ func (c *CommitterImpl) newCommitOptions() types.ContainerCommitOptions {
 		Stdout:   io.Discard,
 		GOptions: *c.globalOptions,
 		Pause:    PauseContainerDuringCommit,
-		DevboxOptions: types.DevboxOptions{
-			RemoveBaseImageTopLayer: c.mergeBaseImageTopLayer,
-		},
 	}
 	if shouldCommitAsEstargz(c.devboxSnapshotter) {
 		opt.Format = types.ImageFormatOCI
@@ -92,7 +87,6 @@ func (c *CommitterImpl) newCommitOptions() types.ContainerCommitOptions {
 // snapshotter and networkMode use DefaultDevboxSnapshotter and DefaultNetworkMode when empty.
 func NewCommitter(
 	registryAddr, registryUsername, registryPassword string,
-	merge bool,
 	snapshotter, networkMode string,
 ) (Committer, error) {
 	if snapshotter == "" {
@@ -152,15 +146,14 @@ func NewCommitter(
 	}
 
 	return &CommitterImpl{
-		containerdClient:       containerdClient,
-		conn:                   conn,
-		globalOptions:          newGlobalOptionConfigWithSnapshotter(snapshotter),
-		registryAddr:           registryAddr,
-		registryUsername:       registryUsername,
-		registryPassword:       registryPassword,
-		mergeBaseImageTopLayer: merge,
-		devboxSnapshotter:      snapshotter,
-		networkMode:            networkMode,
+		containerdClient:  containerdClient,
+		conn:              conn,
+		globalOptions:     newGlobalOptionConfigWithSnapshotter(snapshotter),
+		registryAddr:      registryAddr,
+		registryUsername:  registryUsername,
+		registryPassword:  registryPassword,
+		devboxSnapshotter: snapshotter,
+		networkMode:       networkMode,
 	}, nil
 }
 
@@ -197,11 +190,6 @@ func (c *CommitterImpl) CreateContainer(
 	}
 	if resolvedStorageLimit := resolveStorageLimit(storageLimit); resolvedStorageLimit != "" {
 		originalAnnotations[v1alpha2.AnnotationStorageLimit] = resolvedStorageLimit
-	}
-
-	// Add merge base image layers annotation if enabled
-	if c.mergeBaseImageTopLayer {
-		originalAnnotations[v1alpha2.AnnotationInit] = AnnotationImageFromValue
 	}
 
 	// convert labels to "containerd.io/snapshot/devbox-" format

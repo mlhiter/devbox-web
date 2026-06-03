@@ -912,7 +912,7 @@ func (r *DevboxReconciler) generateExpectedRunningPod(
 		helper.WithPodNodeName(currentRecord.Node),
 		helper.WithPodRuntimeHandler(runtimeHandler),
 	}
-	if r.MergeBaseImageTopLayer {
+	if devbox.Spec.MergeBaseImageTopLayer {
 		podOptions = append(podOptions, helper.WithPodInit(commit.AnnotationImageFromValue))
 	}
 	return r.generateDevboxPod(devbox, podOptions...), nil

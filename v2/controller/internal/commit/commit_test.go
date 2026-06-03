@@ -41,7 +41,7 @@ func requireContainerdTestEnv(t *testing.T) {
 
 // init Committer
 func TestNewCommitter(t *testing.T) {
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	if err != nil {
 		t.Fatalf("NewCommitter failed: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestCommitFlow(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. create committer
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	// 2. prepare test data
@@ -78,7 +78,7 @@ func TestCommitFlow(t *testing.T) {
 func TestCreateContainer(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	require.NoError(t, err)
 
 	// create container
@@ -136,7 +136,7 @@ func TestResolveStorageLimit(t *testing.T) {
 func TestCreateContainerWithoutStorageLimit(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	require.NoError(t, err)
 
 	devboxName := fmt.Sprintf("test-devbox-no-limit-%d", time.Now().Unix())
@@ -166,7 +166,7 @@ func TestCreateContainerWithoutStorageLimit(t *testing.T) {
 func TestDeleteContainer(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -225,7 +225,7 @@ func TestDeleteContainer(t *testing.T) {
 func TestRemoveContainer(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -284,7 +284,7 @@ func TestRemoveContainer(t *testing.T) {
 func TestErrorCases(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -318,7 +318,7 @@ func TestErrorCases(t *testing.T) {
 func TestConcurrentOperations(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	// concurrent to create container
@@ -378,7 +378,7 @@ func TestConcurrentOperations(t *testing.T) {
 func TestRuntimeSelection(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -431,7 +431,7 @@ func TestRuntimeSelection(t *testing.T) {
 func TestConnectionManagement(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -515,7 +515,7 @@ func TestPushToDockerHub(t *testing.T) {
 	registryUser := "cunzili"
 	registryPassword := "123456789"
 
-	committer, err := NewCommitter(registryAddr, registryUser, registryPassword, true, "", "")
+	committer, err := NewCommitter(registryAddr, registryUser, registryPassword, "", "")
 	if err != nil {
 		t.Errorf("Skip Docker Hub push test: failed to create committer: %v", err)
 	}
@@ -591,7 +591,7 @@ func TestPushWithoutAuth(t *testing.T) {
 	registryUser := ""
 	registryPassword := ""
 
-	committer, err := NewCommitter(registryAddr, registryUser, registryPassword, true, "", "")
+	committer, err := NewCommitter(registryAddr, registryUser, registryPassword, "", "")
 	if err != nil {
 		t.Skipf("Skip no-auth push test: failed to create committer: %v", err)
 	}
@@ -630,7 +630,7 @@ func TestPushWithoutAuth(t *testing.T) {
 func TestRemoveImage(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -674,7 +674,7 @@ func TestAtomicLabels(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
 	ctx = namespaces.WithNamespace(ctx, DefaultNamespace)
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	// 1. create a test container
@@ -776,7 +776,7 @@ func TestAtomicLabels(t *testing.T) {
 func TestGetImage(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)
@@ -798,7 +798,7 @@ func TestGetImage(t *testing.T) {
 func TestRemoveImagePerformance(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()
-	committer, err := NewCommitter("", "", "", true, "", "")
+	committer, err := NewCommitter("", "", "", "", "")
 	assert.NoError(t, err)
 
 	committerImpl, ok := committer.(*CommitterImpl)

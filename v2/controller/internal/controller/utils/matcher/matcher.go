@@ -165,6 +165,12 @@ func (s StorageLimitMatcher) Match(expectPod, pod *corev1.Pod) bool {
 	return expectedStorageLimit == actualStorageLimit
 }
 
+type InitAnnotationMatcher struct{}
+
+func (m InitAnnotationMatcher) Match(expectPod, pod *corev1.Pod) bool {
+	return expectPod.Annotations[devboxv1alpha2.AnnotationInit] == pod.Annotations[devboxv1alpha2.AnnotationInit]
+}
+
 // PredicateCommitStatus returns the commit status of the pod
 // if the pod container id is empty, it means the pod is pending or has't started, we can assume the image has not been committed
 // otherwise, it means the pod has been started, we can assume the image has been committed

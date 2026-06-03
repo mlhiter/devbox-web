@@ -100,8 +100,6 @@ func main() {
 	var acceptanceThreshold int
 	var stateChangeHandlerWorkers int
 	var stateChangeHandlerQueueSize int
-	// merge base image layers flag
-	var mergeBaseImageTopLayer bool
 	// default base image flag for setLvRemovable's temp container
 	var defaultBaseImage string
 	// when this option is enabled, the controller will set up the block io resource configuration of a devbox pod
@@ -244,13 +242,6 @@ func main() {
 		4096,
 		"The buffered queue size for state change event processing.",
 	)
-	// merge base image layers flag
-	flag.BoolVar(
-		&mergeBaseImageTopLayer,
-		"merge-base-image-top-layer",
-		false,
-		"If set true, devbox will merge base image top layers during create and remove top layer during commit.",
-	)
 	flag.BoolVar(
 		&enableBlockIOResouce,
 		"enable-block-io-resource",
@@ -378,6 +369,7 @@ func main() {
 	if enablePodStorageLimitMatcher {
 		podMatchers = append(podMatchers, matcher.StorageLimitMatcher{})
 	}
+	podMatchers = append(podMatchers, matcher.InitAnnotationMatcher{})
 
 	stateChangeBroadcaster := record.NewBroadcaster()
 
@@ -418,7 +410,6 @@ func main() {
 		NodeName:                  nodes.GetNodeName(),
 		AcceptanceThreshold:       acceptanceThreshold,
 		NodeStatsProvider:         &stat.NodeStatsProviderImpl{},
-		MergeBaseImageTopLayer:    mergeBaseImageTopLayer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Devbox")
 		os.Exit(1)
@@ -428,7 +419,6 @@ func main() {
 		registryAddr,
 		registryUser,
 		registryPassword,
-		mergeBaseImageTopLayer,
 		commit.DefaultDevboxSnapshotter,
 		networkMode,
 	)
@@ -441,7 +431,6 @@ func main() {
 		registryAddr,
 		registryUser,
 		registryPassword,
-		mergeBaseImageTopLayer,
 		commit.DevboxStargzSnapshotter,
 		networkMode,
 	)
