@@ -3932,14 +3932,14 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - rule: self.spec.state == oldSelf.spec.state || (self.status.contentID in
-            self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus
+        - rule: self.spec.state == oldSelf.spec.state || !has(self.status) || (self.status.contentID
+            in self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus
             != 'Committing')
         - message: spec.mergeBaseImageTopLayer cannot be changed while the devbox
             is Running or Paused
           rule: self.spec.mergeBaseImageTopLayer == oldSelf.spec.mergeBaseImageTopLayer
-            || !has(oldSelf.status.state) || !(oldSelf.status.state in ['Running',
-            'Paused'])
+            || !has(oldSelf.status) || !has(oldSelf.status.state) || !(oldSelf.status.state
+            in ['Running', 'Paused'])
     served: true
     storage: true
     subresources:

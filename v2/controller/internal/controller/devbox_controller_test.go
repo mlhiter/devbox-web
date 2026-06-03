@@ -33,6 +33,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -151,6 +152,51 @@ var _ = Describe("Devbox Controller", func() {
 			assertFn(g)
 		}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 	}
+
+	It("initializes a newly created devbox without status", func() {
+		resourceName := fmt.Sprintf("test-resource-no-status-%s", rand.String(5))
+		typeNamespacedName := client.ObjectKey{Name: resourceName, Namespace: namespace}
+		rawDevbox := &unstructured.Unstructured{}
+		rawDevbox.SetGroupVersionKind(devboxv1alpha2.GroupVersion.WithKind("Devbox"))
+		rawDevbox.SetName(resourceName)
+		rawDevbox.SetNamespace(namespace)
+		rawDevbox.Object["spec"] = map[string]interface{}{
+			"state": "Running",
+			"resource": map[string]interface{}{
+				"cpu":    "1",
+				"memory": "1Gi",
+			},
+			"image":                  "busybox:latest",
+			"mergeBaseImageTopLayer": true,
+			"config": map[string]interface{}{
+				"command": []interface{}{"/bin/sh", "-c"},
+				"args":    []interface{}{"sleep 3600"},
+			},
+			"network": map[string]interface{}{"type": "Tailnet"},
+		}
+		Expect(k8sClient.Create(ctx, rawDevbox)).To(Succeed())
+
+		createdRawDevbox := &unstructured.Unstructured{}
+		createdRawDevbox.SetGroupVersionKind(devboxv1alpha2.GroupVersion.WithKind("Devbox"))
+		Expect(k8sClient.Get(ctx, typeNamespacedName, createdRawDevbox)).To(Succeed())
+		Expect(createdRawDevbox.Object).NotTo(HaveKey("status"))
+
+		reconciler := buildReconciler()
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			devbox := &devboxv1alpha2.Devbox{}
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, devbox)).To(Succeed())
+			g.Expect(devbox.Spec.MergeBaseImageTopLayer).To(BeTrue())
+			g.Expect(devbox.Finalizers).To(ContainElement(devboxv1alpha2.FinalizerName))
+			g.Expect(devbox.Status.State).To(Equal(devboxv1alpha2.DevboxStateRunning))
+			g.Expect(devbox.Status.ContentID).NotTo(BeEmpty())
+			g.Expect(devbox.Status.CommitRecords).To(HaveKey(devbox.Status.ContentID))
+
+			pod := &corev1.Pod{}
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, pod)).To(Succeed())
+			g.Expect(pod.Annotations).
+				To(HaveKeyWithValue(devboxv1alpha2.AnnotationInit, "true"))
+		})
+	})
 
 	It("creates managed kube access resources and pod wiring when enabled", func() {
 		resourceName := fmt.Sprintf("test-resource-enabled-%s", rand.String(5))
