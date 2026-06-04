@@ -18,7 +18,6 @@ import (
 	"log/slog"
 
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
-	storageutil "github.com/sealos-apps/devbox/v2/controller/internal/storage"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -153,16 +152,7 @@ func (p PortMatcher) Match(expectPod, pod *corev1.Pod) bool {
 type StorageLimitMatcher struct{}
 
 func (s StorageLimitMatcher) Match(expectPod, pod *corev1.Pod) bool {
-	expectedStorageLimit, expectedErr := storageutil.ResolveStorageLimit(
-		expectPod.Annotations[devboxv1alpha2.AnnotationStorageLimit],
-	)
-	actualStorageLimit, actualErr := storageutil.ResolveStorageLimit(
-		pod.Annotations[devboxv1alpha2.AnnotationStorageLimit],
-	)
-	if expectedErr != nil || actualErr != nil {
-		return expectPod.Annotations[devboxv1alpha2.AnnotationStorageLimit] == pod.Annotations[devboxv1alpha2.AnnotationStorageLimit]
-	}
-	return expectedStorageLimit == actualStorageLimit
+	return expectPod.Annotations[devboxv1alpha2.AnnotationStorageLimit] == pod.Annotations[devboxv1alpha2.AnnotationStorageLimit]
 }
 
 type InitAnnotationMatcher struct{}

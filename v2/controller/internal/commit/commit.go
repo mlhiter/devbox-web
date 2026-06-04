@@ -28,7 +28,6 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/containerd/stargz-snapshotter/fs/source"
 	"github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
-	storageutil "github.com/sealos-apps/devbox/v2/controller/internal/storage"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -188,8 +187,8 @@ func (c *CommitterImpl) CreateContainer(
 		AnnotationKeyNamespace:       DefaultNamespace,
 		AnnotationKeyImageName:       baseImage,
 	}
-	if resolvedStorageLimit := resolveStorageLimit(storageLimit); resolvedStorageLimit != "" {
-		originalAnnotations[v1alpha2.AnnotationStorageLimit] = resolvedStorageLimit
+	if storageLimit := strings.TrimSpace(storageLimit); storageLimit != "" {
+		originalAnnotations[v1alpha2.AnnotationStorageLimit] = storageLimit
 	}
 
 	// convert labels to "containerd.io/snapshot/devbox-" format
@@ -569,16 +568,6 @@ func (c *CommitterImpl) ContainerExists(ctx context.Context, containerID string)
 		return false, nil
 	}
 	return false, fmt.Errorf("failed to load container %q: %w", containerID, err)
-}
-
-func resolveStorageLimit(storageLimit string) string {
-	resolved, err := storageutil.ResolveStorageLimit(storageLimit)
-	if err != nil {
-		trimmed := strings.TrimSpace(storageLimit)
-		log.Printf("failed to resolve storage limit %q: %v", trimmed, err)
-		return trimmed
-	}
-	return resolved
 }
 
 // ImageExists checks whether image metadata exists in local containerd.

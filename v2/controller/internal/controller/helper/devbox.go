@@ -25,7 +25,6 @@ import (
 	"github.com/google/uuid"
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	utilsresource "github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/resource"
-	storageutil "github.com/sealos-apps/devbox/v2/controller/internal/storage"
 	"github.com/sealos-apps/devbox/v2/controller/label"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
@@ -264,11 +263,7 @@ func GeneratePodAnnotations(
 			annotations[k] = v
 		}
 	}
-	storageLimit, err := storageutil.ResolveStorageLimit(devbox.Spec.StorageLimit)
-	if err != nil {
-		storageLimit = strings.TrimSpace(devbox.Spec.StorageLimit)
-	}
-	annotations[devboxv1alpha2.AnnotationStorageLimit] = storageLimit
+	annotations[devboxv1alpha2.AnnotationStorageLimit] = devbox.Spec.StorageLimit
 	// If BlockIOClass is enabled, add the annotation for BlockIOResources.
 	// Currently we use a hardcoded value but may make it user configurable later.
 	if enableBlockIOResource {
@@ -455,7 +450,14 @@ func IsExceededQuotaError(err error) bool {
 }
 
 func GetStorageLimitInBytes(devbox *devboxv1alpha2.Devbox) (int64, error) {
-	return storageutil.StorageLimitBytes(devbox.Spec.StorageLimit)
+	if devbox.Spec.StorageLimit != "" {
+		storageLimit, err := resource.ParseQuantity(devbox.Spec.StorageLimit)
+		if err != nil {
+			return 0, err
+		}
+		return storageLimit.Value(), nil
+	}
+	return 0, nil
 }
 
 // GenerateStartupVolume generates a volume for the startup script configmap
