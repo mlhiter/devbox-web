@@ -11,6 +11,7 @@ import { jsonRes } from '@/services/backend/response';
 import { devboxKey, ingressProtocolKey, publicDomainKey } from '@/constants/devbox';
 import { RequestSchema } from './schema';
 import { parseTemplateConfig } from '@/utils/tools';
+import { buildFallbackTemplateDetail, isValidTemplateID } from '@/utils/devboxTemplate';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,32 +42,32 @@ export async function GET(req: NextRequest) {
       'devboxes',
       devboxName
     )) as { body: KBDevboxTypeV2 };
-    const template = await devboxDB.template.findUnique({
-      where: {
-        uid: devboxBody.spec.templateID
-      },
-      select: {
-        templateRepository: {
+    const templateID = devboxBody.spec.templateID;
+    const template = isValidTemplateID(templateID)
+      ? await devboxDB.template.findUnique({
+          where: {
+            uid: templateID
+          },
           select: {
+            templateRepository: {
+              select: {
+                uid: true,
+                iconId: true,
+                name: true,
+                kind: true,
+                description: true
+              }
+            },
             uid: true,
-            iconId: true,
+            image: true,
             name: true,
-            kind: true,
-            description: true
+            config: true
           }
-        },
-        uid: true,
-        image: true,
-        name: true,
-        config: true
-      }
-    });
-    if (!template) {
-      return jsonRes({
-        code: 500,
-        error: 'template not found'
-      });
-    }
+        })
+      : null;
+    const resolvedTemplate =
+      template ||
+      buildFallbackTemplateDetail(templateID, devboxBody.spec.image || '', devboxBody.spec.config);
     const label = `${devboxKey}=${devboxName}`;
     // get ingresses, service, configmaps, and pvcs
     const [ingressesResponse, serviceResponse, configMapsResponse, pvcsResponse] = await Promise.all([
@@ -112,7 +113,13 @@ export async function GET(req: NextRequest) {
           customDomain: ingressInfo?.customDomain
         };
       }) || [];
-    const resp = [devboxBody, portInfos, template, configMaps, pvcs] as [KBDevboxTypeV2, PortInfos, typeof template, typeof configMaps, typeof pvcs];
+    const resp = [devboxBody, portInfos, resolvedTemplate, configMaps, pvcs] as [
+      KBDevboxTypeV2,
+      PortInfos,
+      typeof resolvedTemplate,
+      typeof configMaps,
+      typeof pvcs
+    ];
     const adaptedData = adaptDevboxDetailV2(resp);
 
     // get ssh info
@@ -126,7 +133,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const config = parseTemplateConfig(template.config);
+    const config = parseTemplateConfig(resolvedTemplate.config);
 
     return jsonRes({
       data: {
@@ -140,8 +147,8 @@ export async function GET(req: NextRequest) {
         networks: adaptedData.networks,
         sshPort: adaptedData.sshPort,
         base64PrivateKey,
-        userName: config.user,
-        workingDir: config.workingDir,
+        userName: config.user || 'devbox',
+        workingDir: config.workingDir || '/home/devbox/project',
         domain: process.env.SEALOS_DOMAIN
       }
     });

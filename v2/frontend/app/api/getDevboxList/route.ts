@@ -6,6 +6,7 @@ import { adaptDevboxListItemV2 } from '@/utils/adapt';
 import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
 import { jsonRes } from '@/services/backend/response';
+import { buildFallbackTemplateSummary, collectValidTemplateIDs } from '@/utils/devboxTemplate';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,30 +26,40 @@ export async function GET(req: NextRequest) {
     );
 
     const devboxBody = devboxResponse.body as { items: KBDevboxTypeV2[] };
-    const uidList = devboxBody.items.map((item) => item.spec.templateID);
-    const templateResultList = await devboxDB.template.findMany({
-      where: {
-        uid: {
-          in: uidList
-        }
-      },
-      select: {
-        uid: true,
-        templateRepository: {
+    type TemplateSummary = {
+      uid: string;
+      templateRepository: {
+        iconId: string | null;
+      };
+      name: string;
+    };
+
+    const uidList = collectValidTemplateIDs(devboxBody.items.map((item) => item.spec.templateID));
+    const templateResultList: TemplateSummary[] = uidList.length
+      ? await devboxDB.template.findMany({
+          where: {
+            uid: {
+              in: uidList
+            }
+          },
           select: {
-            iconId: true
+            uid: true,
+            templateRepository: {
+              select: {
+                iconId: true
+              }
+            },
+            name: true
           }
-        },
-        name: true
-      }
-    });
-    // match template with devbox
-    const resp = devboxBody.items.flatMap((item) => {
-      const templateItem = templateResultList.find(
-        (templateResult) => templateResult.uid === item.spec.templateID
-      );
-      if (!templateItem) return [];
-      return [[item, templateItem] as [KBDevboxTypeV2, typeof templateItem]];
+        })
+      : [];
+
+    const templateMap = new Map(templateResultList.map((template) => [template.uid, template]));
+
+    const resp = devboxBody.items.map((item) => {
+      const templateItem =
+        templateMap.get(item.spec.templateID) ?? buildFallbackTemplateSummary(item.spec.templateID);
+      return [item, templateItem] as [KBDevboxTypeV2, TemplateSummary];
     });
 
     const adaptedData = resp.map(adaptDevboxListItemV2).sort((a, b) => {

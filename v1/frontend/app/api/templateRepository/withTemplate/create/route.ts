@@ -8,6 +8,7 @@ import { ERROR_ENUM } from '@/services/error';
 import { KBDevboxReleaseType, KBDevboxTypeV2 } from '@/types/k8s';
 import { getRegionUid } from '@/utils/env';
 import { mergeTemplateDefaults } from '@/utils/templateConfig';
+import { buildExternalDevboxUnmanagedResponse, isValidTemplateID } from '@/utils/devboxTemplate';
 import { createTemplateRepositorySchema } from '@/utils/validate';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
       'devboxes',
       devboxName
     )) as { body: KBDevboxTypeV2 };
+
+    const templateID = devboxBody.spec.templateID;
+    if (!isValidTemplateID(templateID)) {
+      return jsonRes(buildExternalDevboxUnmanagedResponse(devboxName, templateID));
+    }
 
     const devboxReleaseImage = releaseBody.status.originalImage;
     if (!devboxReleaseImage) {
@@ -101,7 +107,7 @@ export async function POST(req: NextRequest) {
     // suported deleted because devbox instance of deleted template
     const origionalTemplate = await devboxDB.template.findUnique({
       where: {
-        uid: devboxBody.spec.templateID
+        uid: templateID
       },
       select: {
         templateRepository: {
@@ -111,6 +117,9 @@ export async function POST(req: NextRequest) {
         }
       }
     });
+    if (!origionalTemplate) {
+      return jsonRes(buildExternalDevboxUnmanagedResponse(devboxName, templateID));
+    }
     const officialTagList = await devboxDB.tag.findMany({
       where: {
         type: TagType.OFFICIAL_CONTENT
@@ -137,12 +146,12 @@ export async function POST(req: NextRequest) {
             image: targetImage,
             name: query.version,
             devboxReleaseImage,
-            parentUid: devboxBody.spec.templateID
+            parentUid: templateID
           }
         },
         regionUid: getRegionUid(),
         organizationUid: payload.organizationUid,
-        iconId: origionalTemplate?.templateRepository.iconId,
+        iconId: origionalTemplate.templateRepository.iconId,
         kind: TemplateRepositoryKind.CUSTOM,
         name: query.templateRepositoryName,
         isPublic: query.isPublic

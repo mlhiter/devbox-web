@@ -11,6 +11,7 @@ import { devboxDB } from '@/services/db/init';
 import { ProtocolType } from '@/types/devbox';
 import { adaptDevboxVersionListItem } from '@/utils/adapt';
 import { sendError, sendValidationError, ErrorType, ErrorCode } from '@/app/api/v2alpha/api-error';
+import { buildExternalDevboxUnmanagedError, isValidTemplateID } from '@/utils/devboxTemplate';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,9 +86,21 @@ export async function POST(
       devboxName
     )) as { body: KBDevboxTypeV2 };
 
+    const templateID = devboxBody.spec.templateID;
+    if (!isValidTemplateID(templateID)) {
+      return sendError({
+        status: 422,
+        type: ErrorType.OPERATION_ERROR,
+        code: ErrorCode.INVALID_RESOURCE_SPEC,
+        message:
+          'This Devbox was created externally and does not provide a valid templateID. Template-dependent operations are unavailable.',
+        details: JSON.stringify(buildExternalDevboxUnmanagedError(devboxName, templateID))
+      });
+    }
+
     const template = await devboxDB.template.findUnique({
       where: {
-        uid: devboxBody.spec.templateID
+        uid: templateID
       },
       select: {
         templateRepository: {
@@ -107,10 +120,12 @@ export async function POST(
 
     if (!template) {
       return sendError({
-        status: 404,
-        type: ErrorType.RESOURCE_ERROR,
-        code: ErrorCode.NOT_FOUND,
-        message: 'Template not found'
+        status: 422,
+        type: ErrorType.OPERATION_ERROR,
+        code: ErrorCode.INVALID_RESOURCE_SPEC,
+        message:
+          'This Devbox was created externally and does not provide a valid templateID. Template-dependent operations are unavailable.',
+        details: JSON.stringify(buildExternalDevboxUnmanagedError(devboxName, templateID))
       });
     }
 

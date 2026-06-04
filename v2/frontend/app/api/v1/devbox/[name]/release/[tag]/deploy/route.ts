@@ -11,6 +11,7 @@ import { KBDevboxReleaseType, KBDevboxTypeV2 } from '@/types/k8s';
 import { devboxDB } from '@/services/db/init';
 import { ProtocolType } from '@/types/devbox';
 import { adaptDevboxVersionListItem } from '@/utils/adapt';
+import { buildExternalDevboxUnmanagedResponse, isValidTemplateID } from '@/utils/devboxTemplate';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,9 +80,14 @@ export async function POST(
       devboxName
     )) as { body: KBDevboxTypeV2 };
 
+    const templateID = devboxBody.spec.templateID;
+    if (!isValidTemplateID(templateID)) {
+      return jsonRes(buildExternalDevboxUnmanagedResponse(devboxName, templateID));
+    }
+
     const template = await devboxDB.template.findUnique({
       where: {
-        uid: devboxBody.spec.templateID
+        uid: templateID
       },
       select: {
         templateRepository: {
@@ -100,10 +106,7 @@ export async function POST(
     });
 
     if (!template) {
-      return jsonRes({
-        code: 500,
-        error: 'template not found'
-      });
+      return jsonRes(buildExternalDevboxUnmanagedResponse(devboxName, templateID));
     }
 
     const label = `${devboxKey}=${devboxName}`;
