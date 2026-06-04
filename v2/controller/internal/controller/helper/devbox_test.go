@@ -163,14 +163,14 @@ func TestGetStorageLimitInBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStorageLimitInBytes() error = %v", err)
 	}
-	wantQuantity := resource.MustParse("55Gi")
+	wantQuantity := resource.MustParse("50Gi")
 	want := wantQuantity.Value()
 	if got != want {
 		t.Fatalf("GetStorageLimitInBytes() = %d, want %d", got, want)
 	}
 }
 
-func TestGeneratePodAnnotationsUsesAllocatedStorageLimit(t *testing.T) {
+func TestGeneratePodAnnotationsUsesStorageLimit(t *testing.T) {
 	devbox := &devboxv1alpha2.Devbox{
 		Spec: devboxv1alpha2.DevboxSpec{
 			StorageLimit: "50Gi",
@@ -178,7 +178,7 @@ func TestGeneratePodAnnotationsUsesAllocatedStorageLimit(t *testing.T) {
 	}
 
 	annotations := GeneratePodAnnotations(devbox, false)
-	if got, want := annotations[devboxv1alpha2.AnnotationStorageLimit], "55Gi"; got != want {
+	if got, want := annotations[devboxv1alpha2.AnnotationStorageLimit], "50Gi"; got != want {
 		t.Fatalf("storage-limit annotation = %q, want %q", got, want)
 	}
 }

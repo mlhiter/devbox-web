@@ -264,7 +264,7 @@ func GeneratePodAnnotations(
 			annotations[k] = v
 		}
 	}
-	storageLimit, err := storageutil.ResolveAllocatedStorageLimit(devbox.Spec.StorageLimit)
+	storageLimit, err := storageutil.ResolveStorageLimit(devbox.Spec.StorageLimit)
 	if err != nil {
 		storageLimit = strings.TrimSpace(devbox.Spec.StorageLimit)
 	}
@@ -455,7 +455,7 @@ func IsExceededQuotaError(err error) bool {
 }
 
 func GetStorageLimitInBytes(devbox *devboxv1alpha2.Devbox) (int64, error) {
-	return storageutil.AllocatedStorageLimitBytes(devbox.Spec.StorageLimit)
+	return storageutil.StorageLimitBytes(devbox.Spec.StorageLimit)
 }
 
 // GenerateStartupVolume generates a volume for the startup script configmap

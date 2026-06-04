@@ -572,10 +572,10 @@ func (c *CommitterImpl) ContainerExists(ctx context.Context, containerID string)
 }
 
 func resolveStorageLimit(storageLimit string) string {
-	resolved, err := storageutil.ResolveAllocatedStorageLimit(storageLimit)
+	resolved, err := storageutil.ResolveStorageLimit(storageLimit)
 	if err != nil {
 		trimmed := strings.TrimSpace(storageLimit)
-		log.Printf("failed to resolve allocated storage limit %q: %v", trimmed, err)
+		log.Printf("failed to resolve storage limit %q: %v", trimmed, err)
 		return trimmed
 	}
 	return resolved

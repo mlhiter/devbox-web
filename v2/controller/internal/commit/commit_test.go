@@ -18,11 +18,10 @@ import (
 )
 
 const (
-	baseImageBusyBox          = "docker.io/library/busybox:latest"
-	baseImageNginx            = "docker.io/library/nginx:latest"
-	baseImageAlpine           = "docker.io/library/alpine:latest"
-	testStorageLimit          = "10Gi"
-	testAllocatedStorageLimit = "11Gi"
+	baseImageBusyBox = "docker.io/library/busybox:latest"
+	baseImageNginx   = "docker.io/library/nginx:latest"
+	baseImageAlpine  = "docker.io/library/alpine:latest"
+	testStorageLimit = "10Gi"
 )
 
 func requireContainerdTestEnv(t *testing.T) {
@@ -98,7 +97,7 @@ func TestCreateContainer(t *testing.T) {
 		t.Fatalf("GetContainerAnnotations failed: %v", err)
 	}
 	t.Logf("annotations: %+v", annotations)
-	assert.Equal(t, testAllocatedStorageLimit, annotations["devbox.sealos.io/storage-limit"])
+	assert.Equal(t, testStorageLimit, annotations["devbox.sealos.io/storage-limit"])
 }
 
 func TestResolveStorageLimit(t *testing.T) {
@@ -108,9 +107,9 @@ func TestResolveStorageLimit(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "adds storage redundancy",
+			name:  "keeps storage limit unchanged",
 			limit: testStorageLimit,
-			want:  testAllocatedStorageLimit,
+			want:  testStorageLimit,
 		},
 		{
 			name:  "keeps empty limit omitted",
