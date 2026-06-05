@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -30,7 +29,6 @@ import (
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/nodes"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/registry"
 	utilresource "github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/resource"
-	"github.com/sealos-apps/devbox/v2/controller/internal/stat"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
@@ -42,7 +40,6 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -58,6 +55,11 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+)
+
+const (
+	runModeController = "controller"
+	runModeCommit     = "commit"
 )
 
 func init() {
@@ -86,6 +88,9 @@ func main() {
 	var maximumLimitEphemeralStorage string
 	// pod matcher flag
 	var enablePodResourceMatcher bool
+	var enablePodExtraResourceMatcher bool
+	var enablePodAnnotationsMatcher bool
+	var enablePodSchedulingMatcher bool
 	var enablePodEnvMatcher bool
 	var enablePodPortMatcher bool
 	var enablePodEphemeralStorageMatcher bool
@@ -97,15 +102,26 @@ func main() {
 	var restartPredicateDuration time.Duration
 	// devbox node label
 	var devboxNodeLabel string
-	var acceptanceThreshold int
-	var stateChangeHandlerWorkers int
-	var stateChangeHandlerQueueSize int
 	// default base image flag for setLvRemovable's temp container
 	var defaultBaseImage string
 	// when this option is enabled, the controller will set up the block io resource configuration of a devbox pod
 	var enableBlockIOResouce bool
 	// commit options: network mode
 	var networkMode string
+	var runMode string
+	var enableLeaderElection bool
+	flag.StringVar(
+		&runMode,
+		"run-mode",
+		runModeController,
+		"Runtime mode. Valid values: controller, commit.",
+	)
+	flag.BoolVar(
+		&enableLeaderElection,
+		"leader-elect",
+		true,
+		"Enable leader election for controller mode.",
+	)
 	flag.StringVar(
 		&defaultBaseImage,
 		"default-base-image",
@@ -183,6 +199,24 @@ func main() {
 		"If set, pod resource matcher will be enabled",
 	)
 	flag.BoolVar(
+		&enablePodExtraResourceMatcher,
+		"enable-pod-extra-resource-matcher",
+		true,
+		"If set, pod extra resource matcher will be enabled",
+	)
+	flag.BoolVar(
+		&enablePodAnnotationsMatcher,
+		"enable-pod-expected-annotations-matcher",
+		true,
+		"If set, pod expected annotations matcher will be enabled",
+	)
+	flag.BoolVar(
+		&enablePodSchedulingMatcher,
+		"enable-pod-scheduling-matcher",
+		true,
+		"If set, pod scheduling matcher will be enabled",
+	)
+	flag.BoolVar(
 		&enablePodEnvMatcher,
 		"enable-pod-env-matcher",
 		true,
@@ -223,25 +257,6 @@ func main() {
 		"devbox.sealos.io/node",
 		"The label of the devbox node",
 	)
-	// scheduling flags
-	flag.IntVar(
-		&acceptanceThreshold,
-		"acceptance-threshold",
-		16,
-		"The minimum acceptance score for scheduling devbox to node. Default is 16, which means the node must have enough resources to run the devbox.",
-	)
-	flag.IntVar(
-		&stateChangeHandlerWorkers,
-		"state-change-handler-workers",
-		8,
-		"The number of concurrent workers handling state change events.",
-	)
-	flag.IntVar(
-		&stateChangeHandlerQueueSize,
-		"state-change-handler-queue-size",
-		4096,
-		"The buffered queue size for state change event processing.",
-	)
 	flag.BoolVar(
 		&enableBlockIOResouce,
 		"enable-block-io-resource",
@@ -261,6 +276,10 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if runMode != runModeController && runMode != runModeCommit {
+		setupLog.Error(nil, "invalid run-mode", "runMode", runMode)
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -315,24 +334,14 @@ func main() {
 	config.QPS = float32(configQPS)
 	config.Burst = configBurst
 
+	leaderElection := enableLeaderElection && runMode == runModeController
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         false,
-		// LeaderElectionID:       "b6694722.sealos.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		LeaderElection:         leaderElection,
+		LeaderElectionID:       "devbox-controller.sealos.io",
 
 		NewCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
 			opts.ByObject = map[client.Object]cache.ByObject{
@@ -353,26 +362,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	podMatchers := []matcher.PodMatcher{}
-	if enablePodResourceMatcher {
-		podMatchers = append(podMatchers, matcher.ResourceMatcher{})
-	}
-	if enablePodEnvMatcher {
-		podMatchers = append(podMatchers, matcher.EnvVarMatcher{})
-	}
-	if enablePodPortMatcher {
-		podMatchers = append(podMatchers, matcher.PortMatcher{})
-	}
-	if enablePodEphemeralStorageMatcher {
-		podMatchers = append(podMatchers, matcher.EphemeralStorageMatcher{})
-	}
-	if enablePodStorageLimitMatcher {
-		podMatchers = append(podMatchers, matcher.StorageLimitMatcher{})
-	}
-	podMatchers = append(podMatchers, matcher.InitAnnotationMatcher{})
-
-	stateChangeBroadcaster := record.NewBroadcaster()
-
 	startupCMName := os.Getenv("DEVBOX_STARTUP_CM_NAME")
 	startupCMNamespace := os.Getenv("DEVBOX_STARTUP_CM_NAMESPACE")
 	if (startupCMName != "" && startupCMNamespace == "") ||
@@ -384,149 +373,119 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.DevboxReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("devbox-controller"),
-		StateChangeRecorder: stateChangeBroadcaster.NewRecorder(
-			mgr.GetScheme(),
-			corev1.EventSource{Component: "devbox-controller", Host: nodes.GetNodeName()}),
-		CommitImageRegistry: registryAddr,
-		RequestRate: utilresource.RequestRate{
-			CPU:    requestCPURate,
-			Memory: requestMemoryRate,
-		},
-		EphemeralStorage: utilresource.EphemeralStorage{
-			DefaultRequest: resource.MustParse(requestEphemeralStorage),
-			DefaultLimit:   resource.MustParse(limitEphemeralStorage),
-			MaximumLimit:   resource.MustParse(maximumLimitEphemeralStorage),
-		},
-		PodMatchers:               podMatchers,
-		DebugMode:                 debugMode,
-		EnableBlockIOResource:     enableBlockIOResouce,
-		StartupConfigMapName:      startupCMName,
-		StartupConfigMapNamespace: startupCMNamespace,
-		RestartPredicateDuration:  restartPredicateDuration,
-		NodeName:                  nodes.GetNodeName(),
-		AcceptanceThreshold:       acceptanceThreshold,
-		NodeStatsProvider:         &stat.NodeStatsProviderImpl{},
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Devbox")
-		os.Exit(1)
-	}
-
-	devboxCommitter, err := commit.NewCommitter(
-		registryAddr,
-		registryUser,
-		registryPassword,
-		commit.DefaultDevboxSnapshotter,
-		networkMode,
-	)
-	if err != nil {
-		setupLog.Error(err, "unable to create devbox committer")
-		os.Exit(1)
-	}
-
-	stargzCommitter, err := commit.NewCommitter(
-		registryAddr,
-		registryUser,
-		registryPassword,
-		commit.DevboxStargzSnapshotter,
-		networkMode,
-	)
-	if err != nil {
-		setupLog.Error(err, "unable to create stargz committer")
-		os.Exit(1)
-	}
-
-	// if err := committer.InitializeGC(context.Background()); err != nil {
-	// 	setupLog.Error(err, "unable to initialize GC")
-	// 	os.Exit(1)
-	// }
-
-	stateChangeHandler := controller.EventHandler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("state-change-handler"),
-		Committers: map[string]commit.Committer{
-			commit.DefaultDevboxSnapshotter: devboxCommitter,
-			commit.DevboxStargzSnapshotter:  stargzCommitter,
-		},
-		CommitImageRegistry: registryAddr,
-		NodeName:            nodes.GetNodeName(),
-		Logger:              ctrl.Log.WithName("state-change-handler"),
-		DefaultBaseImage:    defaultBaseImage,
-	}
-
-	if stateChangeHandlerWorkers <= 0 {
-		setupLog.Info(
-			"invalid state-change-handler-workers, fallback to 1",
-			"stateChangeHandlerWorkers",
-			stateChangeHandlerWorkers,
-		)
-		stateChangeHandlerWorkers = 1
-	}
-	if stateChangeHandlerQueueSize <= 0 {
-		setupLog.Info(
-			"invalid state-change-handler-queue-size, fallback to workers*4",
-			"stateChangeHandlerQueueSize",
-			stateChangeHandlerQueueSize,
-		)
-		stateChangeHandlerQueueSize = stateChangeHandlerWorkers * 4
-	}
-
-	setupLog.Info(
-		"StateChangeHandler initialized",
-		"nodeName",
-		nodes.GetNodeName(),
-		"workers",
-		stateChangeHandlerWorkers,
-		"queueSize",
-		stateChangeHandlerQueueSize,
-	)
-	stateChangeEventQueue := make(chan *corev1.Event, stateChangeHandlerQueueSize)
-	for i := 0; i < stateChangeHandlerWorkers; i++ {
-		workerID := i + 1
-		go func(id int) {
-			for event := range stateChangeEventQueue {
-				if err := stateChangeHandler.Handle(context.TODO(), event); err != nil {
-					setupLog.Error(err, "failed to handle event", "event", event.Name, "workerID", id)
-				}
-			}
-		}(workerID)
-	}
-
-	watcher := stateChangeBroadcaster.StartEventWatcher(func(event *corev1.Event) {
-		setupLog.Info("Event received by watcher",
-			"event", event.Name,
-			"eventSourceHost", event.Source.Host,
-			"eventType", event.Type,
-			"eventReason", event.Reason)
-		select {
-		case stateChangeEventQueue <- event:
-		default:
-			setupLog.Info(
-				"state change event queue is full, dropping event",
-				"event", event.Name,
-				"eventReason", event.Reason,
-			)
+	switch runMode {
+	case runModeController:
+		podMatchers := []matcher.PodMatcher{}
+		if enablePodResourceMatcher {
+			podMatchers = append(podMatchers, matcher.ResourceMatcher{})
 		}
-	})
-	defer watcher.Stop()
+		if enablePodExtraResourceMatcher {
+			podMatchers = append(podMatchers, matcher.ExtraResourceMatcher{})
+		}
+		if enablePodAnnotationsMatcher {
+			podMatchers = append(podMatchers, matcher.AnnotationsMatcher{})
+		}
+		if enablePodSchedulingMatcher {
+			podMatchers = append(podMatchers, matcher.SchedulingMatcher{})
+		}
+		if enablePodEnvMatcher {
+			podMatchers = append(podMatchers, matcher.EnvVarMatcher{})
+		}
+		if enablePodPortMatcher {
+			podMatchers = append(podMatchers, matcher.PortMatcher{})
+		}
+		if enablePodEphemeralStorageMatcher {
+			podMatchers = append(podMatchers, matcher.EphemeralStorageMatcher{})
+		}
+		if enablePodStorageLimitMatcher {
+			podMatchers = append(podMatchers, matcher.StorageLimitMatcher{})
+		}
+		podMatchers = append(podMatchers, matcher.InitAnnotationMatcher{})
 
-	if err = (&controller.DevboxreleaseReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Registry: registry.Registry{
-			Host: registryAddr,
-			BasicAuth: registry.BasicAuth{
-				Username: registryUser,
-				Password: registryPassword,
+		if err = (&controller.DevboxReconciler{
+			Client:              mgr.GetClient(),
+			Scheme:              mgr.GetScheme(),
+			Recorder:            mgr.GetEventRecorderFor("devbox-controller"),
+			CommitImageRegistry: registryAddr,
+			RequestRate: utilresource.RequestRate{
+				CPU:    requestCPURate,
+				Memory: requestMemoryRate,
 			},
-		},
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Devboxrelease")
-		os.Exit(1)
+			EphemeralStorage: utilresource.EphemeralStorage{
+				DefaultRequest: resource.MustParse(requestEphemeralStorage),
+				DefaultLimit:   resource.MustParse(limitEphemeralStorage),
+				MaximumLimit:   resource.MustParse(maximumLimitEphemeralStorage),
+			},
+			PodMatchers:               podMatchers,
+			DebugMode:                 debugMode,
+			EnableBlockIOResource:     enableBlockIOResouce,
+			StartupConfigMapName:      startupCMName,
+			StartupConfigMapNamespace: startupCMNamespace,
+			RestartPredicateDuration:  restartPredicateDuration,
+			DevboxNodeLabel:           devboxNodeLabel,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Devbox")
+			os.Exit(1)
+		}
+
+		if err = (&controller.DevboxreleaseReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+			Registry: registry.Registry{
+				Host: registryAddr,
+				BasicAuth: registry.BasicAuth{
+					Username: registryUser,
+					Password: registryPassword,
+				},
+			},
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Devboxrelease")
+			os.Exit(1)
+		}
+	case runModeCommit:
+		devboxCommitter, err := commit.NewCommitter(
+			registryAddr,
+			registryUser,
+			registryPassword,
+			commit.DefaultDevboxSnapshotter,
+			networkMode,
+		)
+		if err != nil {
+			setupLog.Error(err, "unable to create devbox committer")
+			os.Exit(1)
+		}
+
+		stargzCommitter, err := commit.NewCommitter(
+			registryAddr,
+			registryUser,
+			registryPassword,
+			commit.DevboxStargzSnapshotter,
+			networkMode,
+		)
+		if err != nil {
+			setupLog.Error(err, "unable to create stargz committer")
+			os.Exit(1)
+		}
+
+		nodeName := nodes.GetNodeName()
+		handler := &controller.EventHandler{
+			Client: mgr.GetClient(),
+			Committers: map[string]commit.Committer{
+				commit.DefaultDevboxSnapshotter: devboxCommitter,
+				commit.DevboxStargzSnapshotter:  stargzCommitter,
+			},
+			CommitImageRegistry: registryAddr,
+			Logger:              ctrl.Log.WithName("devbox-commit-worker"),
+			DefaultBaseImage:    defaultBaseImage,
+		}
+		if err = (&controller.DevboxNodeReconciler{
+			Client:   mgr.GetClient(),
+			Handler:  handler,
+			NodeName: nodeName,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "DevboxNode")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

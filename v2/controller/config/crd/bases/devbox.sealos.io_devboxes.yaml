@@ -3338,6 +3338,8 @@ spec:
                 type: object
               runtimeClassName:
                 type: string
+              schedulerName:
+                type: string
               state:
                 default: Running
                 enum:

@@ -153,7 +153,9 @@ func (r *DevboxReconciler) syncKubeAccess(
 		serviceAccount.Labels = recLabels
 		return controllerutil.SetControllerReference(devbox, serviceAccount, r.Scheme)
 	}); err != nil {
-		return fmt.Errorf("failed to sync kube access serviceaccount: %w", err)
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to sync kube access serviceaccount: %w", err)
+		}
 	}
 
 	role := buildManagedRole(devbox, recLabels, roleTemplate)
@@ -162,7 +164,9 @@ func (r *DevboxReconciler) syncKubeAccess(
 		role.Rules = managedKubeAccessPolicyRules(roleTemplate)
 		return controllerutil.SetControllerReference(devbox, role, r.Scheme)
 	}); err != nil {
-		return fmt.Errorf("failed to sync kube access role: %w", err)
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to sync kube access role: %w", err)
+		}
 	}
 
 	roleBinding := buildManagedRoleBinding(devbox, recLabels, roleTemplate)
@@ -182,7 +186,9 @@ func (r *DevboxReconciler) syncKubeAccess(
 		}
 		return controllerutil.SetControllerReference(devbox, roleBinding, r.Scheme)
 	}); err != nil {
-		return fmt.Errorf("failed to sync kube access rolebinding: %w", err)
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to sync kube access rolebinding: %w", err)
+		}
 	}
 
 	return nil

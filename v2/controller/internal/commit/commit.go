@@ -315,6 +315,11 @@ func (c *CommitterImpl) newResolver(ctx context.Context, imageRef string, plainH
 	if InsecureRegistry {
 		opts = append(opts, dockerconfigresolver.WithSkipVerifyCerts(true))
 	}
+	if c.registryUsername != "" || c.registryPassword != "" {
+		opts = append(opts, dockerconfigresolver.WithAuthCreds(func(string) (string, string, error) {
+			return c.registryUsername, c.registryPassword, nil
+		}))
+	}
 	if plainHTTP {
 		opts = append(opts, dockerconfigresolver.WithPlainHTTP(true))
 	}
@@ -628,8 +633,7 @@ func (c *CommitterImpl) Push(ctx context.Context, imageName string) error {
 		}
 	}
 
-	// set resolver
-	resolver, err := GetResolver(ctx, c.registryUsername, c.registryPassword)
+	resolver, err := c.newResolver(ctx, imageName, false)
 	if err != nil {
 		log.Printf("failed to set resolver, Image: %s, err: %v\n", imageName, err)
 		return err
@@ -641,10 +645,17 @@ func (c *CommitterImpl) Push(ctx context.Context, imageName string) error {
 		return err
 	}
 
-	// push image
-	err = c.containerdClient.Push(ctx, imageName, imageRef.Target(),
-		containerd.WithResolver(resolver),
-	)
+	if err = c.containerdClient.Push(ctx, imageName, imageRef.Target(), containerd.WithResolver(resolver)); err != nil {
+		if InsecureRegistry && (errors.Is(err, http.ErrSchemeMismatch) || nerderrutil.IsErrConnectionRefused(err)) {
+			log.Printf("registry does not support HTTPS for image %s, retrying push with plain HTTP: %v", imageName, err)
+			resolver, resolveErr := c.newResolver(ctx, imageName, true)
+			if resolveErr != nil {
+				log.Printf("failed to set plain HTTP resolver, Image: %s, err: %v\n", imageName, resolveErr)
+				return resolveErr
+			}
+			err = c.containerdClient.Push(ctx, imageName, imageRef.Target(), containerd.WithResolver(resolver))
+		}
+	}
 	if err != nil {
 		log.Printf("failed to push image: %s, err: %v\n", imageName, err)
 		return err

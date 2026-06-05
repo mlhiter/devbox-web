@@ -268,6 +268,9 @@ func (r *DevboxReconciler) syncSecret(
 	}
 
 	if err := r.Create(ctx, secret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	return nil
@@ -429,6 +432,9 @@ func (r *DevboxReconciler) syncStartupConfigMap(
 	}
 
 	if err := r.Create(ctx, configmap); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to create configmap: %w", err)
 	}
 	return nil
@@ -849,7 +855,11 @@ func (r *DevboxReconciler) syncPod(
 		// get pod
 		switch len(podList.Items) {
 		case 0:
+			r.pinPodToCurrentNodeForCreate(devbox, expectPod)
 			if err := r.Create(ctx, expectPod); err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					return nil
+				}
 				return err
 			}
 		case 1:
@@ -1173,13 +1183,26 @@ func (r *DevboxReconciler) generateExpectedRunningPod(
 	podOptions := []helper.DevboxPodOptions{
 		helper.WithPodImage(currentRecord.BaseImage),
 		helper.WithPodContentID(devbox.Status.ContentID),
-		helper.WithPodNodeName(currentRecord.Node),
 		helper.WithPodRuntimeHandler(runtimeHandler),
 	}
 	if devbox.Spec.MergeBaseImageTopLayer {
 		podOptions = append(podOptions, helper.WithPodInit(commit.AnnotationImageFromValue))
 	}
 	return r.generateDevboxPod(devbox, podOptions...), nil
+}
+
+func (r *DevboxReconciler) pinPodToCurrentNodeForCreate(
+	devbox *devboxv1alpha2.Devbox,
+	pod *corev1.Pod,
+) {
+	if devbox == nil || pod == nil || devbox.Status.CommitRecords == nil {
+		return
+	}
+	currentRecord := devbox.Status.CommitRecords[devbox.Status.ContentID]
+	if currentRecord == nil || currentRecord.Node == "" {
+		return
+	}
+	helper.WithPodRequiredNodeName(currentRecord.Node)(pod)
 }
 
 func (r *DevboxReconciler) updateLastContainerStatus(
@@ -1424,8 +1447,9 @@ func (r *DevboxReconciler) generateDevboxPod(
 			Volumes:    volumes,
 
 			RuntimeClassName: runtimeClassNamePtr,
+			SchedulerName:    devbox.Spec.SchedulerName,
 
-			NodeSelector: devbox.Spec.NodeSelector,
+			NodeSelector: r.generateDevboxNodeSelector(devbox),
 			Tolerations:  devbox.Spec.Tolerations,
 			Affinity:     devbox.Spec.Affinity,
 		},
@@ -1445,4 +1469,20 @@ func (r *DevboxReconciler) generateDevboxPod(
 	}
 
 	return expectPod
+}
+
+func (r *DevboxReconciler) generateDevboxNodeSelector(
+	devbox *devboxv1alpha2.Devbox,
+) map[string]string {
+	nodeSelector := make(map[string]string)
+	if label := strings.TrimSpace(r.DevboxNodeLabel); label != "" {
+		nodeSelector[label] = ""
+	}
+	for key, value := range devbox.Spec.NodeSelector {
+		nodeSelector[key] = value
+	}
+	if len(nodeSelector) == 0 {
+		return nil
+	}
+	return nodeSelector
 }

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -13,15 +12,10 @@ import (
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	"github.com/sealos-apps/devbox/v2/controller/internal/commit"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/helper"
-	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/events"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,13 +28,10 @@ var (
 type EventHandler struct {
 	Committers          map[string]commit.Committer
 	CommitImageRegistry string
-	NodeName            string
 	DefaultBaseImage    string
 
-	Logger   logr.Logger
-	Client   client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Logger logr.Logger
+	Client client.Client
 }
 
 func (h *EventHandler) getCommitterBySnapshotter(snapshotter string) (commit.Committer, error) {
@@ -63,232 +54,6 @@ func (h *EventHandler) getCommitterBySnapshotter(snapshotter string) (commit.Com
 		return fallback, nil
 	}
 	return nil, fmt.Errorf("committer for snapshotter %q not found", selected)
-}
-
-// todo: handle state change event
-func (h *EventHandler) Handle(ctx context.Context, event *corev1.Event) error {
-	h.Logger.Info("StateChangeHandler.Handle called",
-		"event", event.Name,
-		"eventSourceHost", event.Source.Host,
-		"handlerNodeName", h.NodeName,
-		"eventType", event.Type,
-		"eventReason", event.Reason,
-		"eventMessage", event.Message)
-
-	if event.Source.Host != h.NodeName {
-		h.Logger.Info("event source host is not the node name, skip", "event", event)
-		return nil
-	}
-
-	switch event.Reason {
-	// handle storage cleanup
-	case events.ReasonStorageCleanupRequested:
-		return h.handleStorageCleanup(ctx, event)
-
-	// handle state change
-	case events.ReasonDevboxStateChanged:
-		return h.handleDevboxStateChange(ctx, event)
-
-	default:
-		return errors.New("invalid event")
-	}
-}
-
-// handleDevboxStateChange handle new structured state change event
-func (h *EventHandler) handleDevboxStateChange(ctx context.Context, event *corev1.Event) error {
-	h.Logger.Info(
-		"Devbox state change event detected",
-		"event",
-		event.Name,
-		"message",
-		event.Message,
-	)
-	devbox := &devboxv1alpha2.Devbox{}
-	if err := h.Client.Get(
-		ctx,
-		types.NamespacedName{Namespace: event.Namespace, Name: event.InvolvedObject.Name},
-		devbox,
-	); err != nil {
-		h.Logger.Error(err, "failed to get devbox", "devbox", event.InvolvedObject.Name)
-		return err
-	}
-
-	// Check if state transition is valid and handle accordingly
-	currentState := devbox.Status.State
-	targetState := devbox.Spec.State
-
-	// Handle invalid state transition
-	if currentState == devboxv1alpha2.DevboxStateShutdown &&
-		targetState == devboxv1alpha2.DevboxStateStopped {
-		h.Recorder.Eventf(
-			devbox,
-			corev1.EventTypeWarning,
-			"Shutdown state is not allowed to be changed to stopped state",
-			"Shutdown state is not allowed to be changed to stopped state",
-		)
-		h.Logger.Error(
-			errors.New("shutdown state is not allowed to be changed to stopped state"),
-			"shutdown state is not allowed to be changed to stopped state",
-			"devbox",
-			devbox.Name,
-		)
-		return errors.New("shutdown state is not allowed to be changed to stopped state")
-	}
-
-	// Handle state transitions that require commit, only running and paused devbox can be shutdown or stopped
-	needsCommit := (targetState == devboxv1alpha2.DevboxStateShutdown || targetState == devboxv1alpha2.DevboxStateStopped) &&
-		(currentState == devboxv1alpha2.DevboxStateRunning || currentState == devboxv1alpha2.DevboxStatePaused)
-
-	if needsCommit {
-		// Keep the lock held across the whole retry loop to prevent concurrent commits during backoff windows.
-		commitKey := devbox.Status.ContentID
-		if commitKey == "" {
-			err := errors.New("empty contentID, cannot start commit")
-			h.Logger.Error(err, "invalid devbox for commit", "devbox", devbox.Name)
-			return err
-		}
-
-		// Check if commit is already in progress to prevent duplicate requests
-		if _, loaded := commitMap.LoadOrStore(commitKey, true); loaded {
-			h.Logger.Info(
-				"commit already in progress, skipping duplicate request",
-				"devbox",
-				devbox.Name,
-				"contentID",
-				commitKey,
-			)
-			return nil
-		}
-		defer commitMap.Delete(commitKey)
-
-		start := time.Now()
-		h.Logger.Info(
-			"start commit devbox",
-			"devbox",
-			devbox.Name,
-			"contentID",
-			devbox.Status.ContentID,
-			"time",
-			start,
-		)
-
-		// retry commit devbox with retry logic
-		// backoff: fixed 10s, up to 30 steps (~5min)
-		err := retry.OnError(wait.Backoff{
-			Duration: 10 * time.Second,
-			Factor:   1.0,
-			Jitter:   0.1,
-			Steps:    30,
-		}, func(err error) bool {
-			// Don't retry if the context is cancelled/timed out, or if devbox is not found
-			// Controller will handle storage cleanup when devbox is not found
-			return !errors.Is(err, context.Canceled) &&
-				!errors.Is(err, context.DeadlineExceeded) &&
-				!apierrors.IsNotFound(err)
-		}, func() error {
-			err := h.commitDevbox(ctx, devbox, targetState)
-			if err != nil {
-				h.Logger.Error(err, "failed to commit devbox in retry", "devbox", devbox.Name)
-				return err
-			}
-			return nil
-		})
-		if err != nil {
-			h.Logger.Error(err, "failed to commit devbox after retries", "devbox", devbox.Name)
-			return err
-		}
-
-		h.Logger.Info(
-			"commit devbox success",
-			"devbox",
-			devbox.Name,
-			"contentID",
-			devbox.Status.ContentID,
-			"time",
-			time.Since(start),
-		)
-	} else if currentState != targetState {
-		// Handle simple state transitions without commit with retry
-		h.Logger.Info(
-			"update devbox status",
-			"devbox",
-			devbox.Name,
-			"from",
-			currentState,
-			"to",
-			targetState,
-		)
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			latestDevbox := &devboxv1alpha2.Devbox{}
-			if err := h.Client.Get(
-				ctx,
-				types.NamespacedName{Namespace: devbox.Namespace, Name: devbox.Name},
-				latestDevbox,
-			); err != nil {
-				return err
-			}
-			latestDevbox.Status.State = targetState
-			// Transition synced; clear pending and advance observedGeneration.
-			if latestDevbox.Spec.State == latestDevbox.Status.State {
-				latestDevbox.Status.ObservedGeneration = latestDevbox.Generation
-				latestDevbox.SetCondition(metav1.Condition{
-					Type:               devboxv1alpha2.DevboxConditionStateTransitionPending,
-					Status:             metav1.ConditionFalse,
-					ObservedGeneration: latestDevbox.Generation,
-					Reason:             devboxv1alpha2.DevboxReasonStateTransitionSynced,
-					Message:            "spec.state matches status.state",
-					LastTransitionTime: metav1.Now(),
-				})
-			}
-			latestDevbox.SetCondition(metav1.Condition{
-				Type:               devboxv1alpha2.DevboxConditionCommitInProgress,
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: latestDevbox.Generation,
-				Reason:             devboxv1alpha2.DevboxReasonCommitNotInProgress,
-				Message:            "no commit workflow in progress",
-				LastTransitionTime: metav1.Now(),
-			})
-			return h.Client.Status().Update(ctx, latestDevbox)
-		})
-		if err != nil {
-			h.Logger.Error(err, "failed to update devbox status", "devbox", devbox.Name)
-			return err
-		}
-	}
-	return nil
-}
-
-func (h *EventHandler) handleStorageCleanup(ctx context.Context, event *corev1.Event) error {
-	h.Logger.Info("Storage cleanup event detected", "event", event.Name, "message", event.Message)
-	if _, loaded := deleteMap.LoadOrStore(event.InvolvedObject.Name, true); loaded {
-		h.Logger.Info(
-			"delete devbox already in progress, skipping duplicate request",
-			"devbox",
-			event.InvolvedObject.Name,
-		)
-		return nil
-	}
-	defer func() {
-		deleteMap.Delete(event.InvolvedObject.Name)
-	}()
-	if err := h.removeStorage(ctx, event); err != nil {
-		h.Logger.Error(err, "failed to clean up storage during delete devbox", "devbox", event.Name)
-		h.Recorder.Eventf(&corev1.ObjectReference{
-			Kind:      event.InvolvedObject.Kind,
-			Name:      event.InvolvedObject.Name,
-			Namespace: event.InvolvedObject.Namespace,
-		}, corev1.EventTypeWarning, "Storage cleanup failed",
-			"Failed to cleanup Storage: %v", err)
-	} else {
-		h.Logger.Info("Successfully requested storage cleanup during deletion", "devbox", event.Name)
-		h.Recorder.Eventf(&corev1.ObjectReference{
-			Kind:      event.InvolvedObject.Kind,
-			Name:      event.InvolvedObject.Name,
-			Namespace: event.InvolvedObject.Namespace,
-		}, corev1.EventTypeNormal, "Storage cleanup succeeded",
-			"Successfully requested storage cleanup for devbox %s", event.Name)
-	}
-	return nil
 }
 
 func (h *EventHandler) commitDevbox(
@@ -759,50 +524,6 @@ func (h *EventHandler) generateImageName(devbox *devboxv1alpha2.Devbox) string {
 	)
 }
 
-func (h *EventHandler) removeStorage(ctx context.Context, event *corev1.Event) error {
-	h.Logger.Info(
-		"Starting devbox deletion Storage cleanup",
-		"devbox",
-		event.Name,
-		"message",
-		event.Message,
-	)
-	devboxName, contentID, baseImage, storageLimit, snapshotter, runtimeClass, runtimeHandler := h.parseStorageCleanupAnno(event.Annotations)
-
-	// Use k8s.io/client-go/util/retry for robust retry logic
-	err := retry.OnError(
-		wait.Backoff{
-			Duration: 10 * time.Second,
-			Factor:   1.0,
-			Jitter:   0.1,
-			Steps:    30,
-		},
-		func(err error) bool { return true },
-		func() error {
-			return h.cleanupStorage(
-				ctx,
-				devboxName,
-				contentID,
-				baseImage,
-				storageLimit,
-				snapshotter,
-				runtimeClass,
-				runtimeHandler,
-			)
-		},
-	)
-	if err != nil {
-		h.Logger.Error(err, "Failed to cleanup storage after all retries", "devbox", devboxName)
-		return fmt.Errorf(
-			"failed to cleanup storage for devbox %s after retries: %w",
-			devboxName,
-			err,
-		)
-	}
-	h.Logger.Info("Successfully requested storage cleanup", "devbox", devboxName)
-	return nil
-}
-
 func (h *EventHandler) cleanupStorage(
 	ctx context.Context,
 	devboxName, contentID, baseImage, storageLimit, snapshotter, runtimeClass, runtimeHandler string,
@@ -918,20 +639,6 @@ func (h *EventHandler) cleanupStorage(
 	)
 
 	return nil
-}
-
-// parseStorageCleanupAnno parses the annotations from the event and returns the devboxName, contentID, and baseImage
-func (h *EventHandler) parseStorageCleanupAnno(
-	annotations events.Annotations,
-) (devboxName, contentID, baseImage, storageLimit, snapshotter, runtimeClass, runtimeHandler string) {
-	devboxName = annotations[events.KeyAnnotationDevboxName]
-	contentID = annotations[events.KeyAnnotationContentID]
-	baseImage = annotations[events.KeyAnnotationBaseImage]
-	storageLimit = annotations[events.KeyAnnotationStorageLimit]
-	snapshotter = annotations[events.KeyAnnotationSnapshotter]
-	runtimeClass = annotations[events.KeyAnnotationRuntimeClass]
-	runtimeHandler = annotations[events.KeyAnnotationRuntimeHandler]
-	return devboxName, contentID, baseImage, storageLimit, snapshotter, runtimeClass, runtimeHandler
 }
 
 func normalizeContainerRuntimeID(containerID string) string {

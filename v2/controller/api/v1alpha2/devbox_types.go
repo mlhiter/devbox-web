@@ -46,8 +46,6 @@ const (
 
 	// Label the devbox pod with the devbox part of
 	LabelDevBoxPartOf = "devbox"
-	// Index for pod node name
-	PodNodeNameIndex = "spec.nodeName"
 	// RuntimeClass names supported by devbox controller.
 	RuntimeClassDevboxRunc       = "devbox-runtime"
 	RuntimeClassDevboxStargzRunc = "devbox-stargz-runtime"
@@ -188,6 +186,8 @@ type DevboxSpec struct {
 
 	// +kubebuilder:validation:Optional
 	RuntimeClassName string `json:"runtimeClassName,omitempty"`
+	// +kubebuilder:validation:Optional
+	SchedulerName string `json:"schedulerName,omitempty"`
 	// +kubebuilder:validation:Optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 	// +kubebuilder:validation:Optional

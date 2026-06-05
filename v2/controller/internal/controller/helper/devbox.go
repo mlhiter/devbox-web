@@ -200,9 +200,45 @@ func WithPodLabels(labels map[string]string) DevboxPodOptions {
 	}
 }
 
-func WithPodNodeName(nodeName string) DevboxPodOptions {
+func WithPodRequiredNodeName(nodeName string) DevboxPodOptions {
 	return func(pod *corev1.Pod) {
-		pod.Spec.NodeName = nodeName
+		nodeName = strings.TrimSpace(nodeName)
+		if nodeName == "" {
+			return
+		}
+		if pod.Spec.Affinity == nil {
+			pod.Spec.Affinity = &corev1.Affinity{}
+		} else {
+			pod.Spec.Affinity = pod.Spec.Affinity.DeepCopy()
+		}
+		if pod.Spec.Affinity.NodeAffinity == nil {
+			pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+		}
+		required := pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+		if required == nil {
+			required = &corev1.NodeSelector{}
+		}
+
+		nodeNameRequirement := corev1.NodeSelectorRequirement{
+			Key:      "metadata.name",
+			Operator: corev1.NodeSelectorOpIn,
+			Values:   []string{nodeName},
+		}
+		if len(required.NodeSelectorTerms) == 0 {
+			required.NodeSelectorTerms = []corev1.NodeSelectorTerm{
+				{
+					MatchFields: []corev1.NodeSelectorRequirement{nodeNameRequirement},
+				},
+			}
+		} else {
+			for i := range required.NodeSelectorTerms {
+				required.NodeSelectorTerms[i].MatchFields = append(
+					required.NodeSelectorTerms[i].MatchFields,
+					nodeNameRequirement,
+				)
+			}
+		}
+		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = required
 	}
 }
 

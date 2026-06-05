@@ -8,7 +8,7 @@ metadata:
   name: system
 ---
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
   name: controller-manager
   namespace: system
@@ -17,6 +17,7 @@ metadata:
     app.kubernetes.io/name: devbox
     app.kubernetes.io/managed-by: kustomize
 spec:
+  replicas: 2
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -28,15 +29,89 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      containers:
+      - command:
+        - /manager
+        args:
+        - --run-mode=controller
+        - --leader-elect=true
+        - --health-probe-bind-address=:8081
+        - --registry-addr=hub.192.168.10.70.nip.io
+        - --registry-user=admin
+        - --registry-password=f4ed069e60461916839a5d6f9ea2b286
+        image: ghcr.io/sealos-apps/devbox-v2-controller:latest
+        imagePullPolicy: IfNotPresent
+        name: manager
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1000Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: controller-manager
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: commit-worker
+  namespace: system
+  labels:
+    control-plane: commit-worker
+    app.kubernetes.io/name: devbox
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      control-plane: commit-worker
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: commit-worker
+      labels:
+        control-plane: commit-worker
+    spec:
       securityContext:
         runAsUser: 0
       containers:
       - command:
         - /manager
         args:
+        - --run-mode=commit
         - --health-probe-bind-address=:8081
-        - --metrics-bind-address=:8443
+        - --metrics-bind-address=0
         - --default-base-image=docker.io/library/alpine:3.23
+        - --registry-addr=hub.192.168.10.70.nip.io
+        - --registry-user=admin
+        - --registry-password=f4ed069e60461916839a5d6f9ea2b286
         env:
         - name: NODE_NAME
           valueFrom:
@@ -45,7 +120,7 @@ spec:
               fieldPath: spec.nodeName
         image: ghcr.io/sealos-apps/devbox-v2-controller:latest
         imagePullPolicy: IfNotPresent
-        name: manager
+        name: commit-worker
         securityContext:
           privileged: true
           runAsUser: 0

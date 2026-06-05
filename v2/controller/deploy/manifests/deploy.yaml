@@ -3276,6 +3276,12 @@ spec:
                     - admin
                     type: string
                 type: object
+              mergeBaseImageTopLayer:
+                default: false
+                description: MergeBaseImageTopLayer controls whether the devbox snapshotter
+                  copies the base image top layer into the devbox LV when creating
+                  snapshots.
+                type: boolean
               network:
                 properties:
                   extraPorts:
@@ -3338,13 +3344,9 @@ spec:
                   x-kubernetes-int-or-string: true
                 description: ResourceList is a set of (resource name, quantity) pairs.
                 type: object
-              mergeBaseImageTopLayer:
-                default: false
-                description: MergeBaseImageTopLayer controls whether the devbox snapshotter
-                  copies the base image top layer into the devbox LV when creating
-                  snapshots.
-                type: boolean
               runtimeClassName:
+                type: string
+              schedulerName:
                 type: string
               state:
                 default: Running
@@ -4412,7 +4414,7 @@ spec:
     control-plane: controller-manager
 ---
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
@@ -4421,6 +4423,7 @@ metadata:
   name: devbox-controller-manager
   namespace: devbox-system
 spec:
+  replicas: 2
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -4435,9 +4438,83 @@ spec:
       containers:
       - args:
         - --metrics-bind-address=:8443
+        - --run-mode=controller
+        - --leader-elect=true
         - --health-probe-bind-address=:8081
-        - --metrics-bind-address=:8443
+        - --registry-addr=hub.192.168.10.70.nip.io
+        - --registry-user=admin
+        - --registry-password=f4ed069e60461916839a5d6f9ea2b286
+        command:
+        - /manager
+        image: ghcr.io/sealos-apps/devbox-v2-controller:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: manager
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1000Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: controller-manager
+      serviceAccountName: devbox-controller-manager
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: devbox
+    control-plane: commit-worker
+  name: devbox-commit-worker
+  namespace: devbox-system
+spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      control-plane: commit-worker
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: commit-worker
+      labels:
+        control-plane: commit-worker
+    spec:
+      containers:
+      - args:
+        - --run-mode=commit
+        - --health-probe-bind-address=:8081
+        - --metrics-bind-address=0
         - --default-base-image=docker.io/library/alpine:3.23
+        - --registry-addr=hub.192.168.10.70.nip.io
+        - --registry-user=admin
+        - --registry-password=f4ed069e60461916839a5d6f9ea2b286
         command:
         - /manager
         env:
@@ -4458,7 +4535,7 @@ spec:
           periodSeconds: 20
           successThreshold: 1
           timeoutSeconds: 1
-        name: manager
+        name: commit-worker
         readinessProbe:
           failureThreshold: 3
           httpGet:
