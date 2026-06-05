@@ -423,6 +423,32 @@
               }
             ]
           },
+          "conditions": {
+            "description": "Devbox status conditions, including PodReady/StorageFull runtime diagnostics.",
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "message": {
+                  "example": "no space left on device",
+                  "type": "string"
+                },
+                "reason": {
+                  "example": "StorageFull",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "False",
+                  "type": "string"
+                },
+                "type": {
+                  "example": "PodReady",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "creationTimestamp": {
             "example": "2026-02-26T07:20:30Z",
             "format": "date-time",
@@ -445,6 +471,11 @@
                 "type": "null"
               }
             ]
+          },
+          "lastContainerStatus": {
+            "additionalProperties": true,
+            "description": "Last observed Kubernetes container status for the Devbox pod.",
+            "type": "object"
           },
           "name": {
             "example": "demo-devbox",

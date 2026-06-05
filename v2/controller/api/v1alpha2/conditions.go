@@ -26,6 +26,11 @@ const (
 	DevboxConditionKubeAccessSynced       = "KubeAccessSynced"
 	DevboxConditionPodSynced              = "PodSynced"
 	DevboxConditionPhaseSynced            = "PhaseSynced"
+
+	// DevboxConditionPodReady reports whether the running Devbox pod has a ready
+	// runtime container. It is separate from PodSynced, which only means the
+	// desired Pod object has been reconciled.
+	DevboxConditionPodReady = "PodReady"
 )
 
 // Devbox condition reasons.
@@ -40,6 +45,13 @@ const (
 	DevboxReasonSyncSucceeded = "SyncSucceeded"
 	DevboxReasonSyncFailed    = "SyncFailed"
 	DevboxReasonNotConfigured = "NotConfigured"
+
+	DevboxReasonPodReady        = "PodReady"
+	DevboxReasonPodPending      = "PodPending"
+	DevboxReasonPodNotFound     = "PodNotFound"
+	DevboxReasonPodRuntimeError = "PodRuntimeError"
+	DevboxReasonStorageFull     = "StorageFull"
+	DevboxReasonStateNotRunning = "StateNotRunning"
 )
 
 // SetCondition sets (or updates) a status condition on the Devbox.

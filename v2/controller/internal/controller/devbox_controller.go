@@ -43,8 +43,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // DevboxReconciler reconciles a Devbox object
@@ -939,8 +941,46 @@ func (r *DevboxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		))).
 		Owns(&corev1.Pod{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		// enqueue request if pod spec/status is updated
+		Watches(
+			&corev1.Event{},
+			handler.EnqueueRequestsFromMapFunc(r.mapPodEventToDevbox),
+			builder.WithPredicates(predicate.NewPredicateFuncs(isStorageFullPodEvent)),
+		).
+		// enqueue request if kubelet records a runtime event for a devbox pod
 		Owns(&corev1.Service{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		// enqueue request if service spec is updated
 		Owns(&corev1.Secret{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Complete(r)
+}
+
+func (r *DevboxReconciler) mapPodEventToDevbox(
+	_ context.Context,
+	obj client.Object,
+) []reconcile.Request {
+	event, ok := obj.(*corev1.Event)
+	if !ok {
+		return nil
+	}
+	if event.InvolvedObject.Kind != "Pod" ||
+		event.InvolvedObject.Name == "" ||
+		event.InvolvedObject.Namespace == "" {
+		return nil
+	}
+	return []reconcile.Request{{
+		NamespacedName: client.ObjectKey{
+			Namespace: event.InvolvedObject.Namespace,
+			Name:      event.InvolvedObject.Name,
+		},
+	}}
+}
+
+func isStorageFullPodEvent(obj client.Object) bool {
+	event, ok := obj.(*corev1.Event)
+	if !ok {
+		return false
+	}
+	return event.InvolvedObject.Kind == "Pod" &&
+		event.InvolvedObject.Name != "" &&
+		event.InvolvedObject.Namespace != "" &&
+		isNoSpaceLeftOnDeviceMessage(event.Message)
 }

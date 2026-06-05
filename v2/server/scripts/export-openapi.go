@@ -520,7 +520,38 @@ func buildSpec() map[string]any {
 							"example": nil,
 						},
 						"state": schemaRef("DevboxStateSummary"),
-						"ssh":   schemaRef("SSHInfo"),
+						"conditions": map[string]any{
+							"type":        "array",
+							"description": "Devbox status conditions, including PodReady/StorageFull runtime diagnostics.",
+							"items": map[string]any{
+								"type":                 "object",
+								"additionalProperties": true,
+								"properties": map[string]any{
+									"type": map[string]any{
+										"type":    "string",
+										"example": "PodReady",
+									},
+									"status": map[string]any{
+										"type":    "string",
+										"example": "False",
+									},
+									"reason": map[string]any{
+										"type":    "string",
+										"example": "StorageFull",
+									},
+									"message": map[string]any{
+										"type":    "string",
+										"example": "no space left on device",
+									},
+								},
+							},
+						},
+						"lastContainerStatus": map[string]any{
+							"type":                 "object",
+							"description":          "Last observed Kubernetes container status for the Devbox pod.",
+							"additionalProperties": true,
+						},
+						"ssh": schemaRef("SSHInfo"),
 						"gateway": map[string]any{
 							"oneOf": []any{
 								schemaRef("GatewayInfo"),

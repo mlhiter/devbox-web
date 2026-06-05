@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	"github.com/sealos-apps/devbox/v2/controller/internal/commit"
@@ -11,6 +12,7 @@ import (
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/matcher"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/rwords"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -130,6 +132,7 @@ func (r *DevboxReconciler) syncPipelineSteps(
 		r.syncDevboxPhaseStep(devbox, recLabels),
 		r.syncKubeAccessStep(devbox, recLabels),
 		r.syncPodStep(devbox, recLabels),
+		r.syncPodReadyConditionStep(devbox, recLabels),
 	}
 }
 
@@ -810,6 +813,18 @@ func (r *DevboxReconciler) syncPodStep(
 	}
 }
 
+func (r *DevboxReconciler) syncPodReadyConditionStep(
+	devbox *devboxv1alpha2.Devbox,
+	recLabels map[string]string,
+) devboxSyncPipelineStep {
+	return devboxSyncPipelineStep{
+		errorLog: "sync pod ready condition failed",
+		run: func(ctx context.Context) error {
+			return r.syncPodReadyCondition(ctx, devbox, recLabels)
+		},
+	}
+}
+
 func (r *DevboxReconciler) syncPod(
 	ctx context.Context,
 	devbox *devboxv1alpha2.Devbox,
@@ -886,6 +901,255 @@ func (r *DevboxReconciler) syncPod(
 	return nil
 }
 
+func (r *DevboxReconciler) syncPodReadyCondition(
+	ctx context.Context,
+	devbox *devboxv1alpha2.Devbox,
+	recLabels map[string]string,
+) error {
+	podList := &corev1.PodList{}
+	if err := r.List(
+		ctx,
+		podList,
+		client.InNamespace(devbox.Namespace),
+		client.MatchingLabels(recLabels),
+	); err != nil {
+		return err
+	}
+
+	if devbox.Spec.State != devboxv1alpha2.DevboxStateRunning {
+		return r.updatePodReadyCondition(ctx, devbox, podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonStateNotRunning,
+			message: fmt.Sprintf("pod is not expected while devbox state is %s", devbox.Spec.State),
+		})
+	}
+
+	if len(podList.Items) == 0 {
+		return r.updatePodReadyCondition(ctx, devbox, podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonPodNotFound,
+			message: "devbox pod has not been created yet",
+		})
+	}
+
+	if len(podList.Items) > 1 {
+		return r.updatePodReadyCondition(ctx, devbox, podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonPodRuntimeError,
+			message: "more than one devbox pod found",
+		})
+	}
+
+	pod := &podList.Items[0]
+	if err := r.updateLastContainerStatus(ctx, devbox, pod); err != nil {
+		return err
+	}
+
+	observation := r.observePodReady(ctx, pod)
+	return r.updatePodReadyCondition(ctx, devbox, observation)
+}
+
+type podReadyObservation struct {
+	status  metav1.ConditionStatus
+	reason  string
+	message string
+}
+
+func (r *DevboxReconciler) observePodReady(
+	ctx context.Context,
+	pod *corev1.Pod,
+) podReadyObservation {
+	if isPodReady(pod) {
+		return podReadyObservation{
+			status:  metav1.ConditionTrue,
+			reason:  devboxv1alpha2.DevboxReasonPodReady,
+			message: "devbox pod is ready",
+		}
+	}
+
+	if message := storageFullMessageFromPodStatus(pod); message != "" {
+		return podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonStorageFull,
+			message: message,
+		}
+	}
+
+	if message := r.storageFullMessageFromPodEvents(ctx, pod); message != "" {
+		return podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonStorageFull,
+			message: message,
+		}
+	}
+
+	if message := runtimeErrorMessageFromPodStatus(pod); message != "" {
+		return podReadyObservation{
+			status:  metav1.ConditionFalse,
+			reason:  devboxv1alpha2.DevboxReasonPodRuntimeError,
+			message: message,
+		}
+	}
+
+	return podReadyObservation{
+		status:  metav1.ConditionFalse,
+		reason:  devboxv1alpha2.DevboxReasonPodPending,
+		message: fmt.Sprintf("devbox pod is %s", pod.Status.Phase),
+	}
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func storageFullMessageFromPodStatus(pod *corev1.Pod) string {
+	return firstMatchingContainerStatusMessage(pod, isNoSpaceLeftOnDeviceMessage)
+}
+
+func runtimeErrorMessageFromPodStatus(pod *corev1.Pod) string {
+	return firstMatchingContainerStatusMessage(pod, func(message string) bool {
+		return strings.TrimSpace(message) != ""
+	})
+}
+
+func firstMatchingContainerStatusMessage(
+	pod *corev1.Pod,
+	match func(string) bool,
+) string {
+	for _, containerStatus := range pod.Status.InitContainerStatuses {
+		if message := containerRuntimeMessage(containerStatus); match(message) {
+			return normalizePodReadyMessage(message)
+		}
+	}
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if message := containerRuntimeMessage(containerStatus); match(message) {
+			return normalizePodReadyMessage(message)
+		}
+	}
+	return ""
+}
+
+func containerRuntimeMessage(containerStatus corev1.ContainerStatus) string {
+	if containerStatus.State.Waiting != nil {
+		return containerStatus.State.Waiting.Message
+	}
+	if containerStatus.State.Terminated != nil {
+		return containerStatus.State.Terminated.Message
+	}
+	return ""
+}
+
+func (r *DevboxReconciler) storageFullMessageFromPodEvents(
+	ctx context.Context,
+	pod *corev1.Pod,
+) string {
+	eventList := &corev1.EventList{}
+	if err := r.List(
+		ctx,
+		eventList,
+		client.InNamespace(pod.Namespace),
+	); err != nil {
+		log.FromContext(ctx).Info(
+			"failed to list pod events for pod ready condition",
+			"pod",
+			client.ObjectKeyFromObject(pod),
+			"error",
+			err,
+		)
+		return ""
+	}
+
+	for i := len(eventList.Items) - 1; i >= 0; i-- {
+		event := eventList.Items[i]
+		if event.InvolvedObject.Kind != "Pod" ||
+			event.InvolvedObject.Name != pod.Name ||
+			event.InvolvedObject.Namespace != pod.Namespace {
+			continue
+		}
+		if pod.UID != "" && event.InvolvedObject.UID != "" && event.InvolvedObject.UID != pod.UID {
+			continue
+		}
+		if !isNoSpaceLeftOnDeviceMessage(event.Message) {
+			continue
+		}
+		return normalizePodReadyMessage(event.Message)
+	}
+	return ""
+}
+
+func isNoSpaceLeftOnDeviceMessage(message string) bool {
+	normalized := strings.ToLower(message)
+	return strings.Contains(normalized, "no space left on device") ||
+		strings.Contains(normalized, "nospaceleftondevice")
+}
+
+func normalizePodReadyMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return ""
+	}
+	return message
+}
+
+func (r *DevboxReconciler) updatePodReadyCondition(
+	ctx context.Context,
+	devbox *devboxv1alpha2.Devbox,
+	observation podReadyObservation,
+) error {
+	var shouldRecordStorageFullEvent bool
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		shouldRecordStorageFullEvent = false
+		latest := &devboxv1alpha2.Devbox{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(devbox), latest); err != nil {
+			return err
+		}
+
+		currentCondition := latest.GetCondition(devboxv1alpha2.DevboxConditionPodReady)
+		if observation.reason == devboxv1alpha2.DevboxReasonStorageFull &&
+			(currentCondition == nil ||
+				currentCondition.Status != observation.status ||
+				currentCondition.Reason != observation.reason ||
+				currentCondition.Message != observation.message) {
+			shouldRecordStorageFullEvent = true
+		}
+		if currentCondition != nil &&
+			currentCondition.Status == observation.status &&
+			currentCondition.Reason == observation.reason &&
+			currentCondition.Message == observation.message &&
+			currentCondition.ObservedGeneration == latest.Generation {
+			return nil
+		}
+
+		latest.SetCondition(metav1.Condition{
+			Type:               devboxv1alpha2.DevboxConditionPodReady,
+			Status:             observation.status,
+			ObservedGeneration: latest.Generation,
+			Reason:             observation.reason,
+			Message:            observation.message,
+			LastTransitionTime: metav1.Now(),
+		})
+		return r.Status().Update(ctx, latest)
+	})
+	if err != nil {
+		return err
+	}
+	if shouldRecordStorageFullEvent {
+		r.Recorder.Eventf(
+			devbox,
+			corev1.EventTypeWarning,
+			devboxv1alpha2.DevboxReasonStorageFull,
+			"Devbox storage is full. Increase spec.storageLimit and restart the Devbox. Runtime error: %s",
+			observation.message,
+		)
+	}
+	return nil
+}
+
 func (r *DevboxReconciler) generateExpectedRunningPod(
 	ctx context.Context,
 	devbox *devboxv1alpha2.Devbox,
@@ -930,6 +1194,12 @@ func (r *DevboxReconciler) updateLastContainerStatus(
 		latestDevbox := &devboxv1alpha2.Devbox{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(devbox), latestDevbox); err != nil {
 			return err
+		}
+		if equality.Semantic.DeepEqual(
+			latestDevbox.Status.LastContainerStatus,
+			pod.Status.ContainerStatuses[0],
+		) {
+			return nil
 		}
 		latestDevbox.Status.LastContainerStatus = pod.Status.ContainerStatuses[0]
 		return r.Status().Update(ctx, latestDevbox)

@@ -339,8 +339,9 @@ type DevboxStatus struct {
 
 // Devbox is the Schema for the devboxes API
 type Devbox struct {
-	// +kubebuilder:validation:XValidation:rule="self.spec.state == oldSelf.spec.state || (self.status.contentID in self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus != 'Committing')"
-	// +kubebuilder:validation:XValidation:rule="self.spec.mergeBaseImageTopLayer == oldSelf.spec.mergeBaseImageTopLayer || !has(oldSelf.status.state) || !(oldSelf.status.state in ['Running', 'Paused'])",message="spec.mergeBaseImageTopLayer cannot be changed while the devbox is Running or Paused"
+	// +kubebuilder:validation:XValidation:rule="self.spec.state == oldSelf.spec.state || !has(self.status) || (self.status.contentID in self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus != 'Committing')"
+	// +kubebuilder:validation:XValidation:rule="self.spec.mergeBaseImageTopLayer == oldSelf.spec.mergeBaseImageTopLayer || !has(oldSelf.status) || !has(oldSelf.status.state) || !(oldSelf.status.state in ['Running', 'Paused'])",message="spec.mergeBaseImageTopLayer cannot be changed while the devbox is Running or Paused"
+
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 

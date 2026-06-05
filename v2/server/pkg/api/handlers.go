@@ -679,7 +679,9 @@ func (s *apiServer) handleGetDevboxInfo(w http.ResponseWriter, r *http.Request) 
 			"status": string(devbox.Status.State),
 			"phase":  string(devbox.Status.Phase),
 		},
-		"ssh": sshInfo,
+		"conditions":          devbox.Status.Conditions,
+		"lastContainerStatus": devbox.Status.LastContainerStatus,
+		"ssh":                 sshInfo,
 	}
 	if !credentialsPending {
 		now := time.Now().UTC()

@@ -435,6 +435,23 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 				Network: devboxv1alpha2.NetworkStatus{
 					UniqueID: "demo-unique-id",
 				},
+				Conditions: []metav1.Condition{
+					{
+						Type:    devboxv1alpha2.DevboxConditionPodReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  devboxv1alpha2.DevboxReasonStorageFull,
+						Message: "no space left on device",
+					},
+				},
+				LastContainerStatus: corev1.ContainerStatus{
+					Name: "demo-devbox",
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "CreateContainerError",
+							Message: "no space left on device",
+						},
+					},
+				},
 			},
 		},
 	)
@@ -483,7 +500,9 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 				Port     int    `json:"port"`
 				UniqueID string `json:"uniqueID"`
 			} `json:"codeServerGateway"`
-			SSH struct {
+			Conditions          []metav1.Condition     `json:"conditions"`
+			LastContainerStatus corev1.ContainerStatus `json:"lastContainerStatus"`
+			SSH                 struct {
 				PrivateKeyBase64 string `json:"privateKeyBase64"`
 			} `json:"ssh"`
 		} `json:"data"`
@@ -524,6 +543,17 @@ func TestHandleGetDevboxInfoIncludesGateway(t *testing.T) {
 	}
 	if payload.Data.CodeServerGateway.UniqueID != "demo-unique-id" {
 		t.Fatalf("unexpected code-server gateway uniqueID: %s", payload.Data.CodeServerGateway.UniqueID)
+	}
+	if len(payload.Data.Conditions) != 1 {
+		t.Fatalf("expected one condition, got %d", len(payload.Data.Conditions))
+	}
+	if payload.Data.Conditions[0].Type != devboxv1alpha2.DevboxConditionPodReady ||
+		payload.Data.Conditions[0].Reason != devboxv1alpha2.DevboxReasonStorageFull {
+		t.Fatalf("unexpected conditions: %+v", payload.Data.Conditions)
+	}
+	if payload.Data.LastContainerStatus.State.Waiting == nil ||
+		payload.Data.LastContainerStatus.State.Waiting.Message != "no space left on device" {
+		t.Fatalf("unexpected lastContainerStatus: %+v", payload.Data.LastContainerStatus)
 	}
 	entry, ok := srv.getGatewayIndex("demo-unique-id")
 	if !ok {

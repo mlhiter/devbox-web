@@ -292,4 +292,91 @@ var _ = Describe("Devbox Controller", func() {
 				To(Equal(0))
 		}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 	})
+
+	It("records storage full pod runtime errors on devbox status", func() {
+		resourceName := fmt.Sprintf("test-storage-full-%s", rand.String(5))
+		typeNamespacedName := client.ObjectKey{Name: resourceName, Namespace: namespace}
+		devbox := newDevbox(resourceName, nil)
+		Expect(k8sClient.Create(ctx, devbox)).To(Succeed())
+
+		reconciler := buildReconciler()
+		reconcileEventually(reconciler, typeNamespacedName)
+		reconcileEventually(reconciler, typeNamespacedName)
+
+		pod := &corev1.Pod{}
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, pod)).To(Succeed())
+		})
+		kubeletMessage := "Error: failed to create containerd container: failed to copy parent upperdir to new snapshot upperdir: write /var/lib/containerd/io.containerd.snapshotter.v1.devbox/snapshots/new-3212179133/fs/var/log/lastlog: no space left on device"
+		pod.Status.Phase = corev1.PodPending
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{
+			{
+				Name: pod.Name,
+				State: corev1.ContainerState{
+					Waiting: &corev1.ContainerStateWaiting{
+						Reason:  "CreateContainerError",
+						Message: kubeletMessage,
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			latest := &devboxv1alpha2.Devbox{}
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, latest)).To(Succeed())
+			condition := latest.GetCondition(devboxv1alpha2.DevboxConditionPodReady)
+			g.Expect(condition).NotTo(BeNil())
+			g.Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(condition.Reason).To(Equal(devboxv1alpha2.DevboxReasonStorageFull))
+			g.Expect(condition.Message).To(ContainSubstring("no space left on device"))
+			g.Expect(latest.Status.LastContainerStatus.State.Waiting).NotTo(BeNil())
+			g.Expect(latest.Status.LastContainerStatus.State.Waiting.Message).To(Equal(kubeletMessage))
+		})
+	})
+
+	It("records storage full kubelet events on devbox status", func() {
+		resourceName := fmt.Sprintf("test-storage-full-event-%s", rand.String(5))
+		typeNamespacedName := client.ObjectKey{Name: resourceName, Namespace: namespace}
+		devbox := newDevbox(resourceName, nil)
+		Expect(k8sClient.Create(ctx, devbox)).To(Succeed())
+
+		reconciler := buildReconciler()
+		reconcileEventually(reconciler, typeNamespacedName)
+		reconcileEventually(reconciler, typeNamespacedName)
+
+		pod := &corev1.Pod{}
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, pod)).To(Succeed())
+		})
+		pod.Status.Phase = corev1.PodPending
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		kubeletMessage := "Error: failed to create containerd container: failed to copy parent upperdir to new snapshot upperdir: write /var/lib/containerd/io.containerd.snapshotter.v1.devbox/snapshots/new-3212179133/fs/var/log/lastlog: no space left on device"
+		Expect(k8sClient.Create(ctx, &corev1.Event{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName + ".storage-full",
+				Namespace: namespace,
+			},
+			InvolvedObject: corev1.ObjectReference{
+				Kind:      "Pod",
+				Namespace: pod.Namespace,
+				Name:      pod.Name,
+				UID:       pod.UID,
+			},
+			Type:    corev1.EventTypeWarning,
+			Reason:  "Failed",
+			Message: kubeletMessage,
+		})).To(Succeed())
+
+		reconcileAndAssert(reconciler, typeNamespacedName, func(g Gomega) {
+			latest := &devboxv1alpha2.Devbox{}
+			g.Expect(k8sClient.Get(ctx, typeNamespacedName, latest)).To(Succeed())
+			condition := latest.GetCondition(devboxv1alpha2.DevboxConditionPodReady)
+			g.Expect(condition).NotTo(BeNil())
+			g.Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(condition.Reason).To(Equal(devboxv1alpha2.DevboxReasonStorageFull))
+			g.Expect(condition.Message).To(Equal(kubeletMessage))
+		})
+	})
 })
