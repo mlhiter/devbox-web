@@ -26,6 +26,7 @@ export const defaultEnv: Env = {
   cpuSlideMarkList: '1,2,4,8,16',
   memorySlideMarkList: '2,4,8,16,32',
   nfsStorageClassName: 'nfs-csi',
+  nfsMaxSize: 20,
   webIdePort: 9999
 };
 

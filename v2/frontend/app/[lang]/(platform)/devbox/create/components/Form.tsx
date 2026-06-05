@@ -39,6 +39,10 @@ const Form = ({ isEdit, countGpuInventory, oldDevboxData }: FormProps) => {
   const { env } = useEnvStore();
 
   const formValues = watch();
+  const pvcStorageGi = (formValues.volumes || []).reduce((total, volume) => {
+    const size = Number(volume?.size);
+    return total + (Number.isFinite(size) ? size : 0);
+  }, 0);
   const showAdvancedConfig = env.enableAdvancedConfig === 'true';
   const requirements = useMemo(() => {
     const currentGpuAmount = formValues.gpu?.amount || 0;
@@ -105,6 +109,7 @@ const Form = ({ isEdit, countGpuInventory, oldDevboxData }: FormProps) => {
             {
               cpu: watch('cpu'),
               memory: watch('memory'),
+              pvcStorage: pvcStorageGi,
               gpu: formValues.gpu
             }
           ]}
@@ -219,7 +224,12 @@ const Form = ({ isEdit, countGpuInventory, oldDevboxData }: FormProps) => {
         </div>
 
         {/* Advanced Configurations */}
-        {showAdvancedConfig && <AdvancedConfig />}
+        {showAdvancedConfig && (
+          <AdvancedConfig
+            isEdit={isEdit}
+            originalVolumes={oldDevboxData?.volumes}
+          />
+        )}
       </div>
     </div>
   );

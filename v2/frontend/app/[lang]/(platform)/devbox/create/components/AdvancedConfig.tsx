@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFormContext } from 'react-hook-form';
 import { PencilLine, Plus, Trash2, FileText, HardDrive } from 'lucide-react';
+import { customAlphabet } from 'nanoid';
 
 import { Button } from '@labring/sealos-ui/button';
 import { Separator } from '@labring/sealos-ui/separator';
@@ -11,20 +12,74 @@ import EnvVariablesDrawer from '@/components/drawers/EnvVariablesDrawer';
 import ConfigMapDrawer from '@/components/drawers/ConfigMapDrawer';
 import NetworkStorageDrawer from '@/components/drawers/NetworkStorageDrawer';
 import type { DevboxEditTypeV2 } from '@/types/devbox';
+import { useEnvStore } from '@/stores/env';
+import { normalizeMountPath } from '@/utils/mountPath';
 
-export default function AdvancedConfig() {
+interface AdvancedConfigProps {
+  isEdit: boolean;
+  originalVolumes?: DevboxEditTypeV2['volumes'];
+}
+
+const DEFAULT_GPU_VOLUME: NonNullable<DevboxEditTypeV2['volumes']>[number] = {
+  path: '/home/devbox/project/model',
+  size: 30
+};
+const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
+const getDefaultGpuVolumeSize = (maxCapacity?: number) => {
+  const parsedMaxCapacity = Number(maxCapacity);
+  if (!Number.isFinite(parsedMaxCapacity) || parsedMaxCapacity < 1) {
+    return DEFAULT_GPU_VOLUME.size;
+  }
+
+  return Math.min(DEFAULT_GPU_VOLUME.size, Math.floor(parsedMaxCapacity));
+};
+const createDefaultGpuVolume = (
+  maxCapacity?: number
+): NonNullable<DevboxEditTypeV2['volumes']>[number] => ({
+  id: `gpu-model-${nanoid()}`,
+  path: DEFAULT_GPU_VOLUME.path,
+  size: getDefaultGpuVolumeSize(maxCapacity)
+});
+
+export default function AdvancedConfig({ isEdit, originalVolumes }: AdvancedConfigProps) {
   const t = useTranslations();
   const { watch, setValue } = useFormContext<DevboxEditTypeV2>();
+  const { env } = useEnvStore();
 
   const envs = watch('envs') || [];
   const configMaps = watch('configMaps') || [];
-  const volumes = watch('volumes') || [];
+  const watchedVolumes = watch('volumes');
+  const volumes = useMemo(() => watchedVolumes ?? [], [watchedVolumes]);
+  const hasGpu = !!watch('gpu.type');
 
   const [isEnvDrawerOpen, setIsEnvDrawerOpen] = useState(false);
   const [isConfigMapDrawerOpen, setIsConfigMapDrawerOpen] = useState(false);
   const [editingConfigMapIndex, setEditingConfigMapIndex] = useState<number | null>(null);
   const [isNetworkStorageDrawerOpen, setIsNetworkStorageDrawerOpen] = useState(false);
   const [editingStorageIndex, setEditingStorageIndex] = useState<number | null>(null);
+  const previousHasGpuRef = useRef<boolean | null>(null);
+
+  const hasDefaultGpuVolume = volumes.some(
+    (item) => item.path?.toLowerCase() === DEFAULT_GPU_VOLUME.path.toLowerCase()
+  );
+
+  useEffect(() => {
+    const previousHasGpu = previousHasGpuRef.current;
+
+    if (previousHasGpu === null) {
+      if (!isEdit && hasGpu && !hasDefaultGpuVolume) {
+        setValue('volumes', [...volumes, createDefaultGpuVolume(env.nfsMaxSize)]);
+      }
+      previousHasGpuRef.current = hasGpu;
+      return;
+    }
+
+    if (!previousHasGpu && hasGpu && !hasDefaultGpuVolume) {
+      setValue('volumes', [...volumes, createDefaultGpuVolume(env.nfsMaxSize)]);
+    }
+
+    previousHasGpuRef.current = hasGpu;
+  }, [env.nfsMaxSize, hasDefaultGpuVolume, hasGpu, isEdit, setValue, volumes]);
 
   return (
     <div className="flex flex-col gap-6 rounded-2xl border border-zinc-200 bg-white p-8">
@@ -236,10 +291,21 @@ export default function AdvancedConfig() {
 
       {isNetworkStorageDrawerOpen && (
         <NetworkStorageDrawer
+          isEdit={isEdit}
+          maxCapacity={env.nfsMaxSize}
           initialValue={editingStorageIndex !== null ? volumes[editingStorageIndex] : undefined}
+          originalValue={
+            isEdit && editingStorageIndex !== null && originalVolumes
+              ? originalVolumes.find(
+                  (v) =>
+                    v.id === volumes[editingStorageIndex].id ||
+                    v.path === volumes[editingStorageIndex].path
+                )
+              : undefined
+          }
           existingPaths={volumes
             .filter((_, idx) => idx !== editingStorageIndex)
-            .map((item) => item.path.toLowerCase())}
+            .map((item) => normalizeMountPath(item.path).toLowerCase())}
           onClose={() => {
             setIsNetworkStorageDrawerOpen(false);
             setEditingStorageIndex(null);

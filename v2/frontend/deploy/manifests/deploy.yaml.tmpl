@@ -119,6 +119,8 @@ spec:
               value: {{ .devboxDomainChallengeSecret }}
             - name: NFS_STORAGE_CLASS_NAME
               value: {{ default "nfs-csi" .nfsStorageClassName }}
+            - name: NFS_MAX_SIZE
+              value: '{{ default "20" .nfsMaxSize }}'
             - name: CUSTOM_SCRIPTS
               value: '{{ default "[]" .customScripts }}'
           securityContext:

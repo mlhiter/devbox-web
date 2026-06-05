@@ -22,6 +22,7 @@ export type Session = {
 export type userPriceType = {
   cpu: number;
   memory: number;
+  storage?: number;
   gpu?: {
     alias: string;
     type: string;

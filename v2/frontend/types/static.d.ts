@@ -1,6 +1,7 @@
 export interface SourcePrice {
   cpu: number;
   memory: number;
+  storage?: number;
   gpu?: {
     alias: string;
     type: string;
@@ -32,6 +33,7 @@ export interface Env {
   cpuSlideMarkList: string;
   memorySlideMarkList: string;
   nfsStorageClassName: string;
+  nfsMaxSize: number;
   webIdePort: number;
 }
 
