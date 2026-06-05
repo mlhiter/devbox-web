@@ -1,0 +1,50 @@
+# DevBox Agent Guide
+
+## Scope
+
+This repository contains DevBox v1 and v2:
+
+- `v1/frontend` and `v1/controller` are the legacy line.
+- `v2/frontend` is the current Next.js frontend.
+- `v2/controller`, `v2/server`, `v2/httpgate`, and `v2/sshgate` are v2 backend/runtime services.
+- `extensions/vscode` is the shared local IDE integration.
+
+When syncing behavior from v1 to v2, treat v2 as the authoritative contract for CRD versions, backend services, storage semantics, and gateway/network architecture. Copy frontend features and bug fixes only when the product behavior still applies to v2.
+
+## Guardrails
+
+- Do not run database write operations unless explicitly requested.
+- Do not modify backend/controller/server/gateway code during frontend-only sync work.
+- Do not sync systemic v1/v2 differences such as CRD API versions, deploy YAML versions, runtime ownership, or controller semantics unless explicitly requested.
+- Preserve v2 frontend contracts: `devbox.sealos.io/v1alpha2`, `storageLimit`, `mergeBaseImageTopLayer`, SSHGate behavior, and shared SDK quota guards.
+- Keep each independent synced feature or bug fix in its own commit.
+- Preserve unrelated dirty work. Stage only files that belong to the current logical change.
+
+## Frontend Commands
+
+```bash
+cd v2/frontend
+pnpm install
+pnpm ts-lint
+pnpm build
+```
+
+`pnpm ts-lint` depends on `.next/types`; after deleting `.next` or running it concurrently with `pnpm build`, run `pnpm build` once and then rerun `pnpm ts-lint`.
+
+## Runtime Notes
+
+- GPU frontend behavior supports both scheduler modes:
+  - `GPU_SCHEDULER_MODE=native` writes `nvidia.com/gpu.product` node selectors.
+  - `GPU_SCHEDULER_MODE=hami` writes `nvidia.com/use-gputype` annotations and alias-defined resource keys.
+- ConfigMap-mounted file updates require a DevBox restart from the frontend flow so changes take effect inside the workspace.
+- Runtime icons live in `v2/frontend/public/images/runtime`.
+
+## Documentation
+
+Use the root docs as the source of truth for handoff:
+
+- `README.md` for quick start and repository layout.
+- `PRODUCT.md` for product scope and users.
+- `DESIGN.md` for frontend visual and interaction conventions.
+- `ROADMAP.md` for priority framing.
+- `docs/architecture.md`, `docs/ia.md`, `docs/runbook.md`, and `docs/references.md` for implementation and operation context.
