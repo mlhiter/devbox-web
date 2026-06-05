@@ -6,6 +6,7 @@ import { jsonRes } from '@/services/backend/response';
 import { devboxDB } from '@/services/db/init';
 import { KBDevboxTypeV2 } from '@/types/k8s';
 import { parseTemplateConfig } from '@/utils/tools';
+import { buildExternalTemplateConfig, isValidTemplateID } from '@/utils/devboxTemplate';
 import { RequestSchema } from './schema';
 
 export const dynamic = 'force-dynamic';
@@ -62,13 +63,15 @@ export async function GET(req: NextRequest) {
       'devboxes',
       devboxName
     )) as { body: KBDevboxTypeV2 };
-    const template = await devboxDB.template.findUnique({
-      where: {
-        uid: devboxBody.spec.templateID
-      }
-    });
-    if (!template) throw new Error(`Template ${devboxBody.spec.templateID} is not found`);
-    const config = parseTemplateConfig(template.config);
+    const templateID = devboxBody.spec.templateID;
+    const template = isValidTemplateID(templateID)
+      ? await devboxDB.template.findUnique({
+          where: {
+            uid: templateID
+          }
+        })
+      : null;
+    const config = template ? parseTemplateConfig(template.config) : buildExternalTemplateConfig();
     return jsonRes({
       data: {
         base64PublicKey,

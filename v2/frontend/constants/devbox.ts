@@ -81,10 +81,12 @@ export const defaultDevboxEditValueV2: DevboxEditTypeV2 = {
   templateUid: '',
   cpu: 2000,
   memory: 4096,
+  storageLimit: '10Gi',
   networks: [],
   envs: [],
   configMaps: [],
-  volumes: []
+  volumes: [],
+  mergeBaseImageTopLayer: true
 };
 
 // TODO: should delete this map,we don not need this in backend

@@ -13,6 +13,7 @@ import Release from './components/Release';
 import IDEButton from '@/components/IDEButton';
 import { TabValue } from './components/Sidebar';
 import { Loading } from '@labring/sealos-ui/loading';
+import { Button } from '@labring/sealos-ui/button';
 import LiveMonitoring from './components/LiveMonitoring';
 import AdvancedConfig from './components/AdvancedConfig';
 
@@ -33,11 +34,18 @@ const DevboxDetailPage = ({ params }: { params: { name: string } }) => {
   const isRunning = devboxDetail?.status.value === DevboxStatusEnum.Running;
 
   const [initialized, setInitialized] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const { refetch } = useQuery(
     ['initDevboxDetail'],
     () => setDevboxDetail(devboxName, env.sealosDomain, !guideIDE),
     {
+      onSuccess() {
+        setInitError(null);
+      },
+      onError(error: any) {
+        setInitError(error?.message || 'Failed to load devbox detail');
+      },
       onSettled() {
         setInitialized(true);
       }
@@ -92,7 +100,26 @@ const DevboxDetailPage = ({ params }: { params: { name: string } }) => {
     env.enableAdvancedSharedMemory
   ]);
 
-  if (!initialized || !devboxDetail) return <Loading />;
+  if (!initialized) return <Loading />;
+
+  if (initError || !devboxDetail) {
+    return (
+      <div className="flex h-[calc(100vh-28px)] w-full items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-zinc-600">{initError || 'Failed to load devbox detail'}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setInitialized(false);
+              refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const showEnvAndConfigmap = env.enableAdvancedEnvAndConfigmap === 'true';
   const showNfs = env.enableAdvancedNfs === 'true';

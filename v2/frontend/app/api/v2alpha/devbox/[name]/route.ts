@@ -13,6 +13,7 @@ import { devboxDB } from '@/services/db/init';
 import { calculateUptime, parseTemplateConfig } from '@/utils/tools';
 import { UpdateDevboxRequestSchema, DeleteDevboxRequestSchema, nanoid } from './schema';
 import { cpuFormatToM, memoryFormatToMi } from '@labring/sealos-shared-sdk';
+import { buildFallbackTemplateDetail, isValidTemplateID } from '@/utils/devboxTemplate';
 
 //need really realtime use force-dynamic
 export const dynamic = 'force-dynamic';
@@ -601,36 +602,32 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
       devboxName
     )) as { body: KBDevboxTypeV2 };
 
-    // Get template information from database
-    const template = await devboxDB.template.findUnique({
-      where: {
-        uid: devboxBody.spec.templateID
-      },
-      select: {
-        templateRepository: {
+    const templateID = devboxBody.spec.templateID;
+    const template = isValidTemplateID(templateID)
+      ? await devboxDB.template.findUnique({
+          where: {
+            uid: templateID
+          },
           select: {
+            templateRepository: {
+              select: {
+                uid: true,
+                iconId: true,
+                name: true,
+                kind: true,
+                description: true
+              }
+            },
             uid: true,
-            iconId: true,
+            image: true,
             name: true,
-            kind: true,
-            description: true
+            config: true
           }
-        },
-        uid: true,
-        image: true,
-        name: true,
-        config: true
-      }
-    });
-
-    if (!template) {
-      return sendError({
-        status: 404,
-        type: ErrorType.RESOURCE_ERROR,
-        code: ErrorCode.NOT_FOUND,
-        message: 'Template not found'
-      });
-    }
+        })
+      : null;
+    const resolvedTemplate =
+      template ||
+      buildFallbackTemplateDetail(templateID, devboxBody.spec.image || '', devboxBody.spec.config);
 
     const label = `${devboxKey}=${devboxName}`;
     const podLabel = `app.kubernetes.io/name=${devboxName}`;
@@ -653,8 +650,7 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
     const secret = secretResponse?.body;
     const pods = podsResponse?.body.items || [];
 
-    // Parse template config
-    const config = parseTemplateConfig(template.config);
+    const config = parseTemplateConfig(resolvedTemplate.config);
 
     // Build SSH information
     const sshPort =
@@ -666,8 +662,8 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
     const ssh = {
       host: sshDomain || '',
       port: sshPort,
-      user: config.user,
-      workingDir: config.workingDir,
+      user: config.user || 'devbox',
+      workingDir: config.workingDir || '/home/devbox/project',
       ...(base64PrivateKey && { privateKey: base64PrivateKey })
     };
 
@@ -735,8 +731,8 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
       upTime,
       uid: devboxBody.metadata?.uid || '',
       resourceType: 'devbox',
-      runtime: template.templateRepository.iconId || '',
-      image: template.image,
+      runtime: resolvedTemplate.templateRepository.iconId || '',
+      image: resolvedTemplate.image,
       status: (devboxBody.status?.phase || 'Pending').toLowerCase(),
       quota,
       ssh,

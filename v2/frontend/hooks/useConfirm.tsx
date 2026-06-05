@@ -8,7 +8,8 @@ import { Button } from '@labring/sealos-ui/button';
 
 const confirmDialogContentStyle: React.CSSProperties = {
   top: '20%',
-  transform: 'translateX(-50%)',
+  left: '50%',
+  translate: '-50% 0',
   animation: 'none',
   transitionDuration: '0ms'
 };

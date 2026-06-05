@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 
 import {
+  DevboxStatusEnum,
   devboxReleaseStatusMap,
   devboxStatusMap,
   PodStatusEnum,
@@ -24,6 +25,24 @@ import { calculateUptime, formatPodTime } from '@/utils/tools';
 import { devboxRemarkKey, gpuNodeSelectorKey, gpuResourceKey } from '../constants/devbox';
 import { cpuFormatToM, memoryFormatToMi } from '@labring/sealos-shared-sdk';
 
+const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
+
+const normalizeStorageLimit = (storageLimit?: string) =>
+  storageLimitOptions.includes(storageLimit || '') ? storageLimit : '10Gi';
+
+const toDevboxStatusEnum = (state?: string): DevboxStatusEnum =>
+  Object.values(DevboxStatusEnum).includes(state as DevboxStatusEnum)
+    ? (state as DevboxStatusEnum)
+    : DevboxStatusEnum.Error;
+
+const getDevboxState = (devbox: KBDevboxTypeV2): DevboxStatusEnum =>
+  toDevboxStatusEnum(devbox.status?.state || devbox.spec.state || DevboxStatusEnum.Pending);
+
+const getDevboxStatus = (phase?: string) => {
+  if (!phase) return devboxStatusMap.Pending;
+  return devboxStatusMap[phase as DevboxStatusEnum] || devboxStatusMap.Error;
+};
+
 export const adaptDevboxListItemV2 = ([devbox, template]: [
   KBDevboxTypeV2,
   {
@@ -36,14 +55,15 @@ export const adaptDevboxListItemV2 = ([devbox, template]: [
 ]): DevboxListItemTypeV2 => {
   const gpuType = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
   const gpuAmount = devbox.spec.resource[gpuResourceKey];
+  const state = getDevboxState(devbox);
 
   return {
     id: devbox.metadata?.uid || ``,
     name: devbox.metadata.name || 'devbox',
     template,
     remark: devbox.metadata?.annotations?.[devboxRemarkKey] || '',
-    status: devboxStatusMap[devbox.status.phase] || devboxStatusMap.Error, // use devbox.status.phase to get status
-    state: devbox.spec.state || 'Error',
+    status: getDevboxStatus(devbox.status?.phase), // use devbox.status.phase to get status
+    state,
     sshPort:
       devbox.spec.network.type === 'SSHGate' ? 2233 : devbox.status?.network.nodePort || 65535,
     createTime: devbox.metadata.creationTimestamp,
@@ -72,6 +92,7 @@ export const adaptDevboxDetailV2 = ([
     devbox.status?.phase && devboxStatusMap[devbox.status.phase]
       ? devboxStatusMap[devbox.status.phase]
       : devboxStatusMap.Pending;
+  const state = getDevboxState(devbox);
 
   const config = devbox.spec.config as any;
   const devboxName = devbox.metadata.name || 'devbox';
@@ -141,14 +162,17 @@ export const adaptDevboxDetailV2 = ([
     templateConfig: JSON.stringify(devbox.spec.config),
     image: template.image,
     iconId: template.templateRepository.iconId || '',
-    status: devboxStatusMap[devbox.status.phase] || devboxStatusMap.Error,
-    state: devbox.spec.state || 'Error',
+    status,
+    state,
     sshPort:
       devbox.spec.network.type === 'SSHGate' ? 2233 : devbox.status?.network.nodePort || 65535,
-    isPause: devbox.status.phase === 'Stopped' || devbox.status.phase === 'Shutdown',
+    isPause: devbox.status?.phase === 'Stopped' || devbox.status?.phase === 'Shutdown',
     createTime: devbox.metadata.creationTimestamp,
     cpu: cpuFormatToM(devbox.spec.resource.cpu),
     memory: memoryFormatToMi(devbox.spec.resource.memory),
+    storageLimit: normalizeStorageLimit(
+      devbox.spec.storageLimit || devbox.spec.resource['ephemeral-storage']
+    ),
     gpu: {
       type: devbox.spec.nodeSelector?.[gpuNodeSelectorKey] || '',
       amount: Number(devbox.spec.resource[gpuResourceKey] || 0),

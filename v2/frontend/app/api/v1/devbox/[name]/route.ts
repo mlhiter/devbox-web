@@ -13,6 +13,7 @@ import { UpdateDevboxRequestSchema, nanoid } from './schema';
 import { devboxDB } from '@/services/db/init';
 import { parseTemplateConfig } from '@/utils/tools';
 import { cpuFormatToM, memoryFormatToMi } from '@labring/sealos-shared-sdk';
+import { buildFallbackTemplateDetail, isValidTemplateID } from '@/utils/devboxTemplate';
 
 export const dynamic = 'force-dynamic';
 
@@ -795,33 +796,32 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
       devboxName
     )) as { body: KBDevboxTypeV2 };
 
-    const template = await devboxDB.template.findUnique({
-      where: {
-        uid: devboxBody.spec.templateID
-      },
-      select: {
-        templateRepository: {
+    const templateID = devboxBody.spec.templateID;
+    const template = isValidTemplateID(templateID)
+      ? await devboxDB.template.findUnique({
+          where: {
+            uid: templateID
+          },
           select: {
+            templateRepository: {
+              select: {
+                uid: true,
+                iconId: true,
+                name: true,
+                kind: true,
+                description: true
+              }
+            },
             uid: true,
-            iconId: true,
+            image: true,
             name: true,
-            kind: true,
-            description: true
+            config: true
           }
-        },
-        uid: true,
-        image: true,
-        name: true,
-        config: true
-      }
-    });
-
-    if (!template) {
-      return jsonRes({
-        code: 500,
-        message: 'Template not found'
-      });
-    }
+        })
+      : null;
+    const resolvedTemplate =
+      template ||
+      buildFallbackTemplateDetail(templateID, devboxBody.spec.image || '', devboxBody.spec.config);
 
     const label = `${devboxKey}=${devboxName}`;
     const podLabel = `app.kubernetes.io/name=${devboxName}`;
@@ -843,7 +843,7 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
     const secret = secretResponse?.body;
     const pods = podsResponse?.body.items || [];
 
-    const config = parseTemplateConfig(template.config);
+    const config = parseTemplateConfig(resolvedTemplate.config);
 
     const sshPort = devboxBody.status?.network?.nodePort || 0;
     const base64PrivateKey = secret?.data?.['SEALOS_DEVBOX_PRIVATE_KEY'] as string | undefined;
@@ -852,8 +852,8 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
     const ssh = {
       host: SEALOS_DOMAIN || '',
       port: sshPort,
-      user: config.user,
-      workingDir: config.workingDir,
+      user: config.user || 'devbox',
+      workingDir: config.workingDir || '/home/devbox/project',
       ...(base64PrivateKey && { privateKey: base64PrivateKey })
     };
 
@@ -923,8 +923,8 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
       name: devboxBody.metadata?.name || devboxName,
       uid: devboxBody.metadata?.uid || '',
       resourceType: 'devbox' as const,
-      runtime: template.templateRepository?.iconId || '',
-      image: template.image,
+      runtime: resolvedTemplate.templateRepository?.iconId || '',
+      image: resolvedTemplate.image,
       status: devboxBody.status?.phase || 'Pending',
       resources,
       ssh,

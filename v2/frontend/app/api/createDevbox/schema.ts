@@ -17,6 +17,14 @@ const GpuSchema = z
   })
   .optional();
 
+const StorageLimitSchema = z
+  .enum(['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'])
+  .optional()
+  .default('10Gi')
+  .openapi({
+    description: 'Storage capacity limit'
+  });
+
 const NetworkSchema = (devboxName: string) =>
   z.object({
     networkName: z.string().optional().default(`${devboxName}-${nanoid()}`).openapi({
@@ -71,6 +79,10 @@ export const RequestSchema = z
     memory: z.number().min(0).default(4096).openapi({
       description:
         'Memory in MB, it is recommended to use options like 2048, 4096, 8192, 16384, 32768, representing 2G, 4G, 8G, 16G, 32G'
+    }),
+    storageLimit: StorageLimitSchema,
+    mergeBaseImageTopLayer: z.boolean().optional().default(true).openapi({
+      description: 'Merge the base image top layer into the Devbox snapshot on creation'
     }),
     gpu: GpuSchema.optional().openapi({
       description: 'GPU configuration, usually empty'

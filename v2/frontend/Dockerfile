@@ -1,7 +1,11 @@
 # Install dependencies only when needed
-FROM node:current-alpine AS deps
+ARG NODE_IMAGE=node:20.4.0-alpine
+ARG PNPM_VERSION=10.32.1
+
+FROM ${NODE_IMAGE} AS deps
+ARG PNPM_VERSION
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat && npm install -g pnpm
+RUN apk add --no-cache libc6-compat openssl && npm install -g pnpm@${PNPM_VERSION}
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
@@ -15,8 +19,10 @@ RUN if [ -f pnpm-lock.yaml ]; then \
   fi
 
 # Rebuild the source code only when needed
-FROM node:current-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
+ARG PNPM_VERSION
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=deps /app/prisma/generated ./prisma/generated
@@ -27,10 +33,10 @@ COPY --from=deps /app/prisma/generated ./prisma/generated
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NEXT_PUBLIC_MOCK_USER ''
 
-RUN npm install -g pnpm && pnpm run build
+RUN npm install -g pnpm@${PNPM_VERSION} && pnpm run build
 
 # Production image, copy all the files and run next
-FROM node:current-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
@@ -41,7 +47,7 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 RUN sed -i 's/https/http/' /etc/apk/repositories
-RUN apk add --no-cache curl ca-certificates \
+RUN apk add --no-cache curl ca-certificates openssl \
   && (apk add --no-cache postgresql18-client \
     || apk add --no-cache postgresql17-client \
     || apk add --no-cache postgresql16-client \
@@ -51,13 +57,13 @@ RUN apk add --no-cache curl ca-certificates \
 
 # You only need to copy next.config.js if you are NOT using the default configuration
 # COPY --from=builder /app/next.config.js ./
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 # COPY --from=builder /app/.env* .
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/app ./
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs

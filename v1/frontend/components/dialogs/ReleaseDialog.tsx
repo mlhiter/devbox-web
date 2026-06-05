@@ -7,7 +7,13 @@ import { cn } from '@labring/sealos-ui';
 import { useEnvStore } from '@/stores/env';
 import { versionSchema, versionErrorEnum } from '@/utils/validate';
 import { DevboxListItemTypeV2, DevboxVersionListItemType } from '@/types/devbox';
-import { releaseDevbox, shutdownDevbox, startDevbox, getDevboxVersionList } from '@/api/devbox';
+import {
+  releaseDevbox,
+  shutdownDevbox,
+  startDevbox,
+  getDevboxVersionList,
+  getDevboxByName
+} from '@/api/devbox';
 import { useErrorMessage } from '@/hooks/useErrorMessage';
 
 import {
@@ -31,6 +37,23 @@ interface ReleaseDialogProps {
   onClose: () => void;
   onSuccess: () => void;
 }
+
+const waitForDevboxStopped = async (devboxName: string) => {
+  const timeout = 2 * 60 * 1000;
+  const pollInterval = 3000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    const devboxDetail = await getDevboxByName(devboxName);
+    if (devboxDetail.status.value === 'Stopped') {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error('devbox_shutdown_timeout');
+};
 
 const ReleaseDialog = ({ onClose, onSuccess, devbox, open }: ReleaseDialogProps) => {
   const t = useTranslations();
@@ -94,8 +117,7 @@ const ReleaseDialog = ({ onClose, onSuccess, devbox, open }: ReleaseDialogProps)
             devboxName: devbox.name,
             shutdownMode: 'Stopped'
           });
-          // wait 3s
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await waitForDevboxStopped(devbox.name);
         }
         // 2.release devbox
         await releaseDevbox({

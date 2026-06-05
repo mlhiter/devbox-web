@@ -84,6 +84,7 @@ export interface DevboxEditTypeV2 {
   image: string;
   cpu: number;
   memory: number;
+  storageLimit?: string;
   gpu?: GpuType;
   networks: PortInfos;
   networkType?: 'NodePort' | 'Tailnet' | 'SSHGate';
@@ -91,6 +92,7 @@ export interface DevboxEditTypeV2 {
   envs?: Array<{ key: string; value: string }>;
   configMaps?: DevboxConfigMapType[];
   volumes?: DevboxVolumeType[];
+  mergeBaseImageTopLayer?: boolean;
 }
 
 export interface DevboxStatusMapType {

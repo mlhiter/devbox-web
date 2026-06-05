@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     );
     const ingresses2: any = (ingressesResponse2.body as { items: any[] }).items;
 
-    ingresses2.forEach(async (ingress: any) => {
+    for (const ingress of ingresses2) {
       const annotationsIngressClass =
         ingress.metadata?.annotations?.['kubernetes.io/ingress.class'];
       const specIngressClass = ingress.spec?.ingressClassName;
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           );
         }
       }
-    });
+    }
 
     await k8sCustomObjects.patchNamespacedCustomObject(
       'devbox.sealos.io',

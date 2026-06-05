@@ -138,20 +138,24 @@ export const useDevboxStore = create<State>()(
         }
 
         // SSH configuration should be obtained regardless of whether it is running on or not
-        const { base64PrivateKey, userName, token } = await getSSHConnectionInfo({
-          devboxName: detail.name
-        });
+        try {
+          const { base64PrivateKey, userName, token } = await getSSHConnectionInfo({
+            devboxName: detail.name
+          });
 
-        const sshPrivateKey = Buffer.from(base64PrivateKey, 'base64').toString('utf-8');
-        const sshConfig = {
-          sshUser: userName,
-          sshDomain: sealosDomain,
-          sshPort: detail.sshPort,
-          sshPrivateKey,
-          token
-        };
+          const sshPrivateKey = Buffer.from(base64PrivateKey, 'base64').toString('utf-8');
+          const sshConfig = {
+            sshUser: userName,
+            sshDomain: sealosDomain,
+            sshPort: detail.sshPort,
+            sshPrivateKey,
+            token
+          };
 
-        detail.sshConfig = sshConfig as DevboxDetailType['sshConfig'];
+          detail.sshConfig = sshConfig as DevboxDetailType['sshConfig'];
+        } catch (error) {
+          console.warn(`Failed to load SSH info for devbox ${detail.name}:`, error);
+        }
 
         if (detail.status.value !== 'Running') {
           set((state) => {
@@ -159,10 +163,12 @@ export const useDevboxStore = create<State>()(
           });
           return detail;
         }
-        const pods = await getDevboxPodsByDevboxName(devboxName);
+        const pods = await getDevboxPodsByDevboxName(devboxName).catch(() => []);
 
         // add upTime by Pod
-        detail.upTime = pods[0].upTime;
+        if (pods.length > 0) {
+          detail.upTime = pods[0].upTime;
+        }
 
         set((state) => {
           state.devboxDetail = detail;

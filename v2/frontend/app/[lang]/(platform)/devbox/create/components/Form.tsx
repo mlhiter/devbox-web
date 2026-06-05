@@ -12,6 +12,7 @@ import type { DevboxEditTypeV2 } from '@/types/devbox';
 import Gpu from './Gpu';
 import Cpu from './Cpu';
 import Memory from './Memory';
+import Storage from './Storage';
 import Network from './Network';
 import Runtime from './Runtime';
 import PriceBox from './PriceBox';
@@ -205,6 +206,10 @@ const Form = ({ isEdit, countGpuInventory, oldDevboxData }: FormProps) => {
                 </div> */}
               </>
             )}
+          </div>
+
+          <div className="mt-10">
+            <Storage />
           </div>
         </div>
 

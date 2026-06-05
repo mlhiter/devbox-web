@@ -20,7 +20,7 @@ export type KBDevboxTypeV2 = {
     };
   };
   spec: KBDevboxSpecV2;
-  status: {
+  status?: {
     // lastState: {
     //   terminated?: {
     //     containerID: string;
@@ -30,8 +30,24 @@ export type KBDevboxTypeV2 = {
     //     startedAt: string;
     //   };
     // };
-    state: 'Pending' | 'Running' | 'Stopped' | 'Stopping' | 'Error' | 'Unknown' | 'Shutdown';
-    phase: 'Pending' | 'Running' | 'Stopped' | 'Stopping' | 'Error' | 'Unknown' | 'Shutdown';
+    state:
+      | 'Pending'
+      | 'Running'
+      | 'Paused'
+      | 'Stopped'
+      | 'Stopping'
+      | 'Error'
+      | 'Unknown'
+      | 'Shutdown';
+    phase:
+      | 'Pending'
+      | 'Running'
+      | 'Paused'
+      | 'Stopped'
+      | 'Stopping'
+      | 'Error'
+      | 'Unknown'
+      | 'Shutdown';
     contentID: string; // first item sha of commitRecords
     commitRecords: {
       [contentID: string]: {
@@ -66,6 +82,7 @@ export interface KBDevboxSpecV2 {
   config: object;
   image: string;
   templateID: string;
+  mergeBaseImageTopLayer?: boolean;
   network: {
     type: 'NodePort' | 'Tailnet' | 'SSHGate'; // devbox 2.5 add SSHGate
     extraPorts: {
@@ -86,6 +103,7 @@ export interface KBDevboxSpecV2 {
   resource: {
     cpu: string;
     memory: string;
+    'ephemeral-storage'?: string;
     [gpuResourceKey]?: string;
   };
   nodeSelector?: {

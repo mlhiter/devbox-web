@@ -35,6 +35,13 @@ import { track } from '@labring/sealos-gtm-sdk';
 import { listTemplate } from '@/api/template';
 import { z } from 'zod';
 
+const omitMergeBaseImageTopLayer = (formData: DevboxEditTypeV2): DevboxEditTypeV2 => {
+  const editableFormData = { ...formData };
+  delete editableFormData.mergeBaseImageTopLayer;
+
+  return editableFormData;
+};
+
 const DevboxCreatePage = () => {
   const router = useRouter();
   const t = useTranslations();
@@ -82,7 +89,10 @@ const DevboxCreatePage = () => {
       if (savedFormData) {
         try {
           const formData = JSON.parse(savedFormData);
-          formHook.reset(formData);
+          formHook.reset({
+            ...defaultDevboxEditValueV2,
+            ...formData
+          });
           localStorage.removeItem('devbox_create_form_data');
         } catch (error) {
           console.error('Failed to parse saved form data:', error);
@@ -122,13 +132,14 @@ const DevboxCreatePage = () => {
     () =>
       debounce((data: DevboxEditTypeV2, env) => {
         try {
-          const newYamlList = generateYamlList(data, env);
+          const yamlFormData = isEdit ? omitMergeBaseImageTopLayer(data) : data;
+          const newYamlList = generateYamlList(yamlFormData, env);
           setYamlList(newYamlList);
         } catch (error) {
           console.error('Failed to generate yaml:', error);
         }
       }, 300),
-    []
+    [isEdit]
   );
 
   const countGpuInventory = useCallback(
@@ -173,8 +184,9 @@ const DevboxCreatePage = () => {
           return;
         }
         oldDevboxEditData.current = res;
-        formOldYamls.current = generateYamlList(res, env);
-        crOldYamls.current = generateYamlList(res, env) as DevboxKindsType[];
+        const editableDevboxData = omitMergeBaseImageTopLayer(res);
+        formOldYamls.current = generateYamlList(editableDevboxData, env);
+        crOldYamls.current = generateYamlList(editableDevboxData, env) as DevboxKindsType[];
         formHook.reset(res);
       },
       onError(err) {
@@ -206,7 +218,7 @@ const DevboxCreatePage = () => {
 
     // update
     if (isEdit) {
-      const yamlList = generateYamlList(formData, env);
+      const yamlList = generateYamlList(omitMergeBaseImageTopLayer(formData), env);
       setYamlList(yamlList);
       const parsedNewYamlList = yamlList.map((item) => item.value);
       const parsedOldYamlList = formOldYamls.current.map((item) => item.value);
