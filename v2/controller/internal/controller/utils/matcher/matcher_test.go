@@ -202,25 +202,25 @@ func TestPodMatchExpectations(t *testing.T) {
 	}
 }
 
-func TestStorageLimitMatcherNormalizesEquivalentQuantities(t *testing.T) {
+func TestStorageLimitMatcherNormalizesAllocatedLimits(t *testing.T) {
 	matcher := StorageLimitMatcher{}
 
 	expectPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				devboxv1alpha2.AnnotationStorageLimit: "10Gi",
+				devboxv1alpha2.AnnotationStorageLimit: "50Gi",
 			},
 		},
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				devboxv1alpha2.AnnotationStorageLimit: "10240Mi",
+				devboxv1alpha2.AnnotationStorageLimit: "55Gi",
 			},
 		},
 	}
 
 	if !matcher.Match(expectPod, pod) {
-		t.Fatalf("StorageLimitMatcher should treat equivalent storage quantities as equal")
+		t.Fatalf("StorageLimitMatcher should treat raw and allocated storage limits as equal")
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-func TestStorageLimitBytes(t *testing.T) {
+func TestAllocatedStorageLimitBytes(t *testing.T) {
 	tests := []struct {
 		name    string
 		limit   string
@@ -19,19 +19,29 @@ func TestStorageLimitBytes(t *testing.T) {
 			want:  "0",
 		},
 		{
-			name:  "keeps create default limit unchanged",
+			name:  "adds ten percent to create default limit",
 			limit: "10Gi",
-			want:  "10Gi",
+			want:  "11Gi",
 		},
 		{
-			name:  "keeps maximum user-facing limit unchanged",
+			name:  "adds ten percent to maximum user-facing limit",
 			limit: "50Gi",
-			want:  "50Gi",
+			want:  "55Gi",
 		},
 		{
 			name:  "trims whitespace before parsing",
 			limit: " 20Gi ",
-			want:  "20Gi",
+			want:  "22Gi",
+		},
+		{
+			name:  "keeps allocated default limit idempotent",
+			limit: "11Gi",
+			want:  "11Gi",
+		},
+		{
+			name:  "keeps allocated maximum limit idempotent",
+			limit: "55Gi",
+			want:  "55Gi",
 		},
 		{
 			name:  "keeps non-user-facing values unchanged",
@@ -47,32 +57,32 @@ func TestStorageLimitBytes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := StorageLimitBytes(tt.limit)
+			got, err := AllocatedStorageLimitBytes(tt.limit)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("StorageLimitBytes() expected error")
+					t.Fatalf("AllocatedStorageLimitBytes() expected error")
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("StorageLimitBytes() error = %v", err)
+				t.Fatalf("AllocatedStorageLimitBytes() error = %v", err)
 			}
 
 			wantQuantity := resource.MustParse(tt.want)
 			want := wantQuantity.Value()
 			if got != want {
-				t.Fatalf("StorageLimitBytes() = %d, want %d", got, want)
+				t.Fatalf("AllocatedStorageLimitBytes() = %d, want %d", got, want)
 			}
 		})
 	}
 }
 
-func TestResolveStorageLimit(t *testing.T) {
-	got, err := ResolveStorageLimit("50Gi")
+func TestResolveAllocatedStorageLimit(t *testing.T) {
+	got, err := ResolveAllocatedStorageLimit("50Gi")
 	if err != nil {
-		t.Fatalf("ResolveStorageLimit() error = %v", err)
+		t.Fatalf("ResolveAllocatedStorageLimit() error = %v", err)
 	}
-	if got != "50Gi" {
-		t.Fatalf("ResolveStorageLimit() = %q, want %q", got, "50Gi")
+	if got != "55Gi" {
+		t.Fatalf("ResolveAllocatedStorageLimit() = %q, want %q", got, "55Gi")
 	}
 }

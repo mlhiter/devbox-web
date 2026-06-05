@@ -153,10 +153,10 @@ func (p PortMatcher) Match(expectPod, pod *corev1.Pod) bool {
 type StorageLimitMatcher struct{}
 
 func (s StorageLimitMatcher) Match(expectPod, pod *corev1.Pod) bool {
-	expectedStorageLimit, expectedErr := storageutil.ResolveStorageLimit(
+	expectedStorageLimit, expectedErr := storageutil.ResolveAllocatedStorageLimit(
 		expectPod.Annotations[devboxv1alpha2.AnnotationStorageLimit],
 	)
-	actualStorageLimit, actualErr := storageutil.ResolveStorageLimit(
+	actualStorageLimit, actualErr := storageutil.ResolveAllocatedStorageLimit(
 		pod.Annotations[devboxv1alpha2.AnnotationStorageLimit],
 	)
 	if expectedErr != nil || actualErr != nil {
