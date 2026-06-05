@@ -178,6 +178,7 @@
     "view_details": "View details and launch the application to production environment"
   },
   "edit": "Edit",
+  "empty_content": "Empty",
   "edit_configmap": "Edit ConfigMap",
   "edit_environment_variables": "Edit Environment Variables",
   "edit_failed": "Edit failed",
@@ -533,6 +534,9 @@
   "tag_required": "Need to input tag",
   "tags": "Tags",
   "template": "Template",
+  "template_defaults": "Template defaults",
+  "template_defaults_public_tip": "These environment variables and config files will be inherited by DevBoxes created from this public runtime. Delete or redact sensitive values before saving.",
+  "template_defaults_tip": "These environment variables and config files will be inherited by DevBoxes created from this runtime. You can delete or redact sensitive values before saving.",
   "template_description": "Description",
   "template_description_placeholder": "Briefly describe the purpose and features of this template......",
   "template_repository_name_already_exists": "This name is already taken. Please try another one.",

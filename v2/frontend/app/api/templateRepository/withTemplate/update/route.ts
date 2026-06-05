@@ -7,6 +7,7 @@ import { devboxDB } from '@/services/db/init';
 import { ERROR_ENUM } from '@/services/error';
 import { KBDevboxReleaseType, KBDevboxTypeV2 } from '@/types/k8s';
 import { getRegionUid } from '@/utils/env';
+import { mergeTemplateDefaults } from '@/utils/templateConfig';
 import { updateTemplateSchema } from '@/utils/validate';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
@@ -160,7 +161,9 @@ export async function POST(req: NextRequest) {
             name: query.version,
             image: tagretImage,
             devboxReleaseImage: originalImage,
-            config: JSON.stringify(devboxBody.spec.config),
+            config: JSON.stringify(
+              mergeTemplateDefaults(devboxBody.spec.config, query.templateDefaults)
+            ),
             templateRepositoryUid: query.templateRepositoryUid,
             parentUid: origionalTemplate?.uid
           }
