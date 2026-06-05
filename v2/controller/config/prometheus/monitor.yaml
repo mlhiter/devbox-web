@@ -1,11 +1,12 @@
-# Prometheus Monitor Service (Metrics)
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+# VictoriaMetrics scrape config for controller-manager metrics.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
 metadata:
   labels:
     control-plane: controller-manager
     app.kubernetes.io/name: devbox
     app.kubernetes.io/managed-by: kustomize
+    release: prometheus
   name: controller-manager-metrics-monitor
   namespace: system
 spec:
@@ -24,3 +25,26 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
+---
+# VictoriaMetrics scrape config for commit-worker metrics.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  labels:
+    control-plane: commit-worker
+    app.kubernetes.io/name: devbox
+    app.kubernetes.io/managed-by: kustomize
+    release: prometheus
+  name: commit-worker-metrics-monitor
+  namespace: system
+spec:
+  endpoints:
+    - path: /metrics
+      port: https
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      control-plane: commit-worker

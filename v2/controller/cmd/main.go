@@ -29,6 +29,7 @@ import (
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/nodes"
 	"github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/registry"
 	utilresource "github.com/sealos-apps/devbox/v2/controller/internal/controller/utils/resource"
+	"github.com/sealos-apps/devbox/v2/controller/internal/monitoring"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
@@ -108,6 +109,8 @@ func main() {
 	var enableBlockIOResouce bool
 	// commit options: network mode
 	var networkMode string
+	var rwStorageCollectInterval time.Duration
+	var rwStorageCollectTimeout time.Duration
 	var runMode string
 	var enableLeaderElection bool
 	flag.StringVar(
@@ -268,6 +271,18 @@ func main() {
 		"network-mode",
 		commit.DefaultNetworkMode,
 		"The network mode for devbox containers during commit",
+	)
+	flag.DurationVar(
+		&rwStorageCollectInterval,
+		"rw-storage-collect-interval",
+		30*time.Second,
+		"The interval for collecting node-local devbox rw layer storage metrics in commit mode.",
+	)
+	flag.DurationVar(
+		&rwStorageCollectTimeout,
+		"rw-storage-collect-timeout",
+		20*time.Second,
+		"The timeout for one node-local devbox rw layer storage collection pass in commit mode.",
 	)
 	opts := zap.Options{
 		Development: true,
@@ -484,6 +499,31 @@ func main() {
 			NodeName: nodeName,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "DevboxNode")
+			os.Exit(1)
+		}
+
+		snapshotServiceFactory, closeSnapshotClient, err := monitoring.NewContainerdSnapshotServiceFactoryFromAddress(
+			commit.DefaultContainerdAddress,
+		)
+		if err != nil {
+			setupLog.Error(err, "unable to create rw storage snapshot service")
+			os.Exit(1)
+		}
+		defer func() {
+			if err := closeSnapshotClient(); err != nil {
+				setupLog.Error(err, "failed to close rw storage snapshot service")
+			}
+		}()
+		if err = mgr.Add(&monitoring.RWStorageCollector{
+			Client:                 mgr.GetClient(),
+			NodeName:               nodeName,
+			SnapshotServiceFactory: snapshotServiceFactory,
+			Recorder:               monitoring.NewPrometheusRWStorageMetricsRecorder(),
+			Logger:                 ctrl.Log.WithName("devbox-rw-storage-collector"),
+			Interval:               rwStorageCollectInterval,
+			CollectTimeout:         rwStorageCollectTimeout,
+		}); err != nil {
+			setupLog.Error(err, "unable to add rw storage collector")
 			os.Exit(1)
 		}
 	}

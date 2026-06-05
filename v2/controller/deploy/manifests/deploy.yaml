@@ -3942,14 +3942,14 @@ spec:
             type: object
         type: object
         x-kubernetes-validations:
-        - rule: self.spec.state == oldSelf.spec.state || (self.status.contentID in
-            self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus
+        - rule: self.spec.state == oldSelf.spec.state || !has(self.status) || (self.status.contentID
+            in self.status.commitRecords && self.status.commitRecords[self.status.contentID].commitStatus
             != 'Committing')
         - message: spec.mergeBaseImageTopLayer cannot be changed while the devbox
             is Running or Paused
           rule: self.spec.mergeBaseImageTopLayer == oldSelf.spec.mergeBaseImageTopLayer
-            || !has(oldSelf.status.state) || !(oldSelf.status.state in ['Running',
-            'Paused'])
+            || !has(oldSelf.status) || !has(oldSelf.status.state) || !(oldSelf.status.state
+            in ['Running', 'Paused'])
     served: true
     storage: true
     subresources:
@@ -4401,6 +4401,24 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: devbox
+    control-plane: commit-worker
+  name: devbox-commit-worker-metrics-service
+  namespace: devbox-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    control-plane: commit-worker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: devbox
     control-plane: controller-manager
   name: devbox-controller-manager-metrics-service
   namespace: devbox-system
@@ -4510,7 +4528,7 @@ spec:
       - args:
         - --run-mode=commit
         - --health-probe-bind-address=:8081
-        - --metrics-bind-address=0
+        - --metrics-bind-address=:8443
         - --default-base-image=docker.io/library/alpine:3.23
         - --registry-addr=hub.192.168.10.70.nip.io
         - --registry-user=admin
@@ -4536,6 +4554,10 @@ spec:
           successThreshold: 1
           timeoutSeconds: 1
         name: commit-worker
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
         readinessProbe:
           failureThreshold: 3
           httpGet:
@@ -4636,3 +4658,47 @@ handler: devbox-stargz-runc
 kind: RuntimeClass
 metadata:
   name: devbox-stargz-runtime
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: devbox
+    control-plane: commit-worker
+    release: prometheus
+  name: devbox-commit-worker-metrics-monitor
+  namespace: devbox-system
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    path: /metrics
+    port: https
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  selector:
+    matchLabels:
+      control-plane: commit-worker
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: devbox
+    control-plane: controller-manager
+    release: prometheus
+  name: devbox-controller-manager-metrics-monitor
+  namespace: devbox-system
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    path: /metrics
+    port: https
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  selector:
+    matchLabels:
+      control-plane: controller-manager
