@@ -2,7 +2,7 @@ import Image from 'next/image';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { Check, ChevronDown } from 'lucide-react';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { memo } from 'react';
 
 import {
@@ -83,6 +83,32 @@ const IDEButton = memo(
     const [sshConnectionData, setSSHConnectionData] = useState<SSHConnectionData>();
 
     const currentIDE = getDevboxIDEByDevboxName(devboxName) as IDEType;
+    const defaultLeftColumnItems = useMemo(
+      () => getLeftColumnItems(env.currencySymbol),
+      [env.currencySymbol]
+    );
+    const defaultRightColumnItems = useMemo(
+      () => getRightColumnItems(env.currencySymbol, env.enableWebideFeature),
+      [env.currencySymbol, env.enableWebideFeature]
+    );
+    const { leftColumnItems, rightColumnItems } = useMemo(
+      () =>
+        getVisibleIDEColumnItems({
+          leftColumnItems: defaultLeftColumnItems,
+          rightColumnItems: defaultRightColumnItems,
+          enabledIDEs: env.enabledIDEs
+        }),
+      [defaultLeftColumnItems, defaultRightColumnItems, env.enabledIDEs]
+    );
+    const visibleIDEValues = useMemo(
+      () => getMenuItemIDEValues([...leftColumnItems, ...rightColumnItems]),
+      [leftColumnItems, rightColumnItems]
+    );
+    const selectedIDE = visibleIDEValues.includes(currentIDE)
+      ? currentIDE
+      : visibleIDEValues[0] || DEFAULT_IDE;
+    const showLeftColumn = leftColumnItems.length > 0;
+    const showRightColumn = rightColumnItems.length > 0;
     const { guideIDE, setGuideIDE } = useGuideStore();
 
     const { openConfirm, ConfirmChild } = useConfirm({
@@ -211,9 +237,9 @@ const IDEButton = memo(
     const pathname = usePathname();
     useEffect(() => {
       if (!guideIDE && isClientSide && pathname.includes('/devbox/detail')) {
-        startDriver(startConnectIDE(t, handleGotoIDE));
+        startDriver(startConnectIDE(t, () => handleGotoIDE(selectedIDE)));
       }
-    }, [guideIDE, isClientSide, t, pathname, handleGotoIDE]);
+    }, [guideIDE, isClientSide, t, pathname, handleGotoIDE, selectedIDE]);
 
     return (
       <div className="!overflow-visible">
@@ -224,7 +250,7 @@ const IDEButton = memo(
               <Button
                 variant="secondary"
                 className="w-32 rounded-r-none px-2"
-                onClick={() => handleGotoIDE(currentIDE)}
+                onClick={() => handleGotoIDE(selectedIDE)}
                 disabled={status.value !== 'Running' || loading}
                 {...leftButtonProps}
               >
@@ -232,10 +258,10 @@ const IDEButton = memo(
                   <Image
                     width={18}
                     height={18}
-                    alt={currentIDE}
-                    src={`/images/ide/${currentIDE}.svg`}
+                    alt={selectedIDE}
+                    src={`/images/ide/${selectedIDE}.svg`}
                   />
-                  <span>{ideObj[currentIDE]?.label}</span>
+                  <span>{ideObj[selectedIDE]?.label}</span>
                 </div>
               </Button>
             </TooltipTrigger>
@@ -259,139 +285,149 @@ const IDEButton = memo(
             <DropdownMenuContent className="p-1.5" align="end">
               <div className="flex">
                 {/* left column */}
-                <div
-                  className={cn(
-                    'space-y-1',
-                    env.currencySymbol === 'usd' ? 'w-[160px]' : 'w-[230px]'
-                  )}
-                >
-                  {getLeftColumnItems(env.currencySymbol).map((item) =>
-                    item.group ? (
-                      <div key={item.value} className="flex gap-1">
-                        {item.options?.map((option, index) => (
-                          <div key={option.value} className="flex items-center">
-                            <DropdownMenuItem
-                              className={cn(
-                                index === 0 ? 'w-[140px]' : 'w-[80px]',
-                                'text-zinc-600',
-                                index === 0 && 'pr-1 pl-2',
-                                index === 1 && 'pr-2 text-zinc-600',
-                                currentIDE === option.value && 'text-zinc-900'
-                              )}
-                              onClick={() => {
-                                updateDevboxIDE(option.value, devboxName);
-                                handleGotoIDE(option.value);
-                              }}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <Image
-                                  width={18}
-                                  height={18}
-                                  alt={option.value}
-                                  src={`/images/ide/${option.value}.svg`}
-                                />
-                                <span className="text-sm whitespace-nowrap">
-                                  {option.menuLabel}
-                                </span>
-                                {currentIDE === option.value && (
-                                  <Check className="h-4 w-4 text-blue-600" />
+                {showLeftColumn && (
+                  <div
+                    className={cn(
+                      'space-y-1',
+                      env.currencySymbol === 'usd' ? 'w-[160px]' : 'w-[230px]'
+                    )}
+                  >
+                    {leftColumnItems.map((item) =>
+                      item.group ? (
+                        <div key={item.value} className="flex gap-1">
+                          {item.options?.map((option, index) => (
+                            <div key={option.value} className="flex items-center">
+                              <DropdownMenuItem
+                                className={cn(
+                                  index === 0 ? 'w-[140px]' : 'w-[80px]',
+                                  'text-zinc-600',
+                                  index === 0 && 'pr-1 pl-2',
+                                  index === 1 && 'pr-2 text-zinc-600',
+                                  selectedIDE === option.value && 'text-zinc-900'
                                 )}
-                              </div>
-                            </DropdownMenuItem>
-                            {index === 0 && <div className="ml-1 h-3 w-0.5 bg-gray-200"></div>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <DropdownMenuItem
-                        key={item.value}
-                        className={cn(
-                          'h-9 justify-between text-zinc-600',
-                          currentIDE === item.value && 'text-zinc-900'
-                        )}
-                        onClick={() => {
-                          updateDevboxIDE(item.value as IDEType, devboxName);
-                          handleGotoIDE(item.value as IDEType);
-                        }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Image
-                            width={18}
-                            height={18}
-                            alt={item.value}
-                            src={`/images/ide/${item.value}.svg`}
-                          />
-                          <span>{item?.menuLabel}</span>
+                                onClick={() => {
+                                  updateDevboxIDE(option.value, devboxName);
+                                  handleGotoIDE(option.value);
+                                }}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <Image
+                                    width={18}
+                                    height={18}
+                                    alt={option.value}
+                                    src={`/images/ide/${option.value}.svg`}
+                                  />
+                                  <span className="text-sm whitespace-nowrap">
+                                    {option.menuLabel}
+                                  </span>
+                                  {selectedIDE === option.value && (
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                  )}
+                                </div>
+                              </DropdownMenuItem>
+                              {index === 0 && <div className="ml-1 h-3 w-0.5 bg-gray-200"></div>}
+                            </div>
+                          ))}
                         </div>
-                        {currentIDE === item.value && <Check className="h-4 w-4 text-blue-600" />}
-                      </DropdownMenuItem>
-                    )
-                  )}
-                </div>
+                      ) : (
+                        <DropdownMenuItem
+                          key={item.value}
+                          className={cn(
+                            'h-9 justify-between text-zinc-600',
+                            selectedIDE === item.value && 'text-zinc-900'
+                          )}
+                          onClick={() => {
+                            updateDevboxIDE(item.value as IDEType, devboxName);
+                            handleGotoIDE(item.value as IDEType);
+                          }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <Image
+                              width={18}
+                              height={18}
+                              alt={item.value}
+                              src={`/images/ide/${item.value}.svg`}
+                            />
+                            <span>{item?.menuLabel}</span>
+                          </div>
+                          {selectedIDE === item.value && (
+                            <Check className="h-4 w-4 text-blue-600" />
+                          )}
+                        </DropdownMenuItem>
+                      )
+                    )}
+                  </div>
+                )}
                 {/* vertical divider */}
-                <div className="mx-1.5 w-px bg-gray-200"></div>
+                {showLeftColumn && showRightColumn && (
+                  <div className="mx-1.5 w-px bg-gray-200"></div>
+                )}
                 {/* right column */}
-                <div className="h-20 w-[230px] space-y-1">
-                  {getRightColumnItems(env.currencySymbol, env.enableWebideFeature).map((item) =>
-                    item.group ? (
-                      <div key={item.value} className="flex gap-1">
-                        {item.options?.map((option, index) => (
-                          <div key={option.value} className="flex items-center">
-                            <DropdownMenuItem
-                              className={cn(
-                                'w-[110px] text-zinc-600',
-                                index === 0 && 'pr-1 pl-2',
-                                index === 1 && 'pr-2 text-zinc-600',
-                                currentIDE === option.value && 'text-zinc-900'
-                              )}
-                              onClick={() => {
-                                updateDevboxIDE(option.value, devboxName);
-                                handleGotoIDE(option.value);
-                              }}
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <Image
-                                  width={18}
-                                  height={18}
-                                  alt={option.value}
-                                  src={`/images/ide/${option.value}.svg`}
-                                />
-                                <span className="whitespace-nowrap">{option.menuLabel}</span>
-                                {currentIDE === option.value && (
-                                  <Check className="h-4 w-4 text-blue-600" />
+                {showRightColumn && (
+                  <div className="h-20 w-[230px] space-y-1">
+                    {rightColumnItems.map((item) =>
+                      item.group ? (
+                        <div key={item.value} className="flex gap-1">
+                          {item.options?.map((option, index) => (
+                            <div key={option.value} className="flex items-center">
+                              <DropdownMenuItem
+                                className={cn(
+                                  'w-[110px] text-zinc-600',
+                                  index === 0 && 'pr-1 pl-2',
+                                  index === 1 && 'pr-2 text-zinc-600',
+                                  selectedIDE === option.value && 'text-zinc-900'
                                 )}
-                              </div>
-                            </DropdownMenuItem>
-                            {index === 0 && <div className="ml-1 h-3 w-0.5 bg-gray-200"></div>}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <DropdownMenuItem
-                        key={item.value}
-                        className={cn(
-                          'h-9 justify-between text-zinc-600',
-                          currentIDE === item.value && 'text-zinc-900'
-                        )}
-                        onClick={() => {
-                          updateDevboxIDE(item.value as IDEType, devboxName);
-                          handleGotoIDE(item.value as IDEType);
-                        }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Image
-                            width={18}
-                            height={18}
-                            alt={item.value}
-                            src={`/images/ide/${item.value}.svg`}
-                          />
-                          <span>{item?.menuLabel}</span>
+                                onClick={() => {
+                                  updateDevboxIDE(option.value, devboxName);
+                                  handleGotoIDE(option.value);
+                                }}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <Image
+                                    width={18}
+                                    height={18}
+                                    alt={option.value}
+                                    src={`/images/ide/${option.value}.svg`}
+                                  />
+                                  <span className="whitespace-nowrap">{option.menuLabel}</span>
+                                  {selectedIDE === option.value && (
+                                    <Check className="h-4 w-4 text-blue-600" />
+                                  )}
+                                </div>
+                              </DropdownMenuItem>
+                              {index === 0 && <div className="ml-1 h-3 w-0.5 bg-gray-200"></div>}
+                            </div>
+                          ))}
                         </div>
-                        {currentIDE === item.value && <Check className="h-4 w-4 text-blue-600" />}
-                      </DropdownMenuItem>
-                    )
-                  )}
-                </div>
+                      ) : (
+                        <DropdownMenuItem
+                          key={item.value}
+                          className={cn(
+                            'h-9 justify-between text-zinc-600',
+                            selectedIDE === item.value && 'text-zinc-900'
+                          )}
+                          onClick={() => {
+                            updateDevboxIDE(item.value as IDEType, devboxName);
+                            handleGotoIDE(item.value as IDEType);
+                          }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <Image
+                              width={18}
+                              height={18}
+                              alt={item.value}
+                              src={`/images/ide/${item.value}.svg`}
+                            />
+                            <span>{item?.menuLabel}</span>
+                          </div>
+                          {selectedIDE === item.value && (
+                            <Check className="h-4 w-4 text-blue-600" />
+                          )}
+                        </DropdownMenuItem>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -504,6 +540,86 @@ export const ideObj = {
     prefix: 'antigravity://'
   }
 } as const;
+
+const DEFAULT_IDE: IDEType = 'vscode';
+const allIDEValues = Object.keys(ideObj) as IDEType[];
+const ideValueMap = new Map(allIDEValues.map((value) => [value.toLowerCase(), value]));
+
+const parseEnabledIDEs = (enabledIDEs?: string): Set<IDEType> | undefined => {
+  const values = (enabledIDEs || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  const ideValues = values
+    .map((value) => ideValueMap.get(value.toLowerCase()))
+    .filter((value): value is IDEType => Boolean(value));
+
+  return ideValues.length > 0 ? new Set(ideValues) : undefined;
+};
+
+const filterMenuItemsByIDEValues = (
+  items: MenuItem[],
+  enabledIDEValues: Set<IDEType> | undefined
+): MenuItem[] => {
+  if (!enabledIDEValues) {
+    return items;
+  }
+
+  return items.flatMap((item) => {
+    if (item.options) {
+      const options = item.options.filter((option) => enabledIDEValues.has(option.value));
+
+      if (options.length === 0) {
+        return [];
+      }
+
+      if (options.length === 1) {
+        return {
+          value: options[0].value,
+          menuLabel: options[0].menuLabel
+        };
+      }
+
+      return {
+        ...item,
+        options
+      };
+    }
+
+    return enabledIDEValues.has(item.value as IDEType) ? item : [];
+  });
+};
+
+const getVisibleIDEColumnItems = ({
+  leftColumnItems,
+  rightColumnItems,
+  enabledIDEs
+}: {
+  leftColumnItems: MenuItem[];
+  rightColumnItems: MenuItem[];
+  enabledIDEs?: string;
+}): { leftColumnItems: MenuItem[]; rightColumnItems: MenuItem[] } => {
+  const enabledIDEValues = parseEnabledIDEs(enabledIDEs);
+  const filteredLeftColumnItems = filterMenuItemsByIDEValues(leftColumnItems, enabledIDEValues);
+  const filteredRightColumnItems = filterMenuItemsByIDEValues(rightColumnItems, enabledIDEValues);
+
+  if (filteredLeftColumnItems.length === 0 && filteredRightColumnItems.length === 0) {
+    return { leftColumnItems, rightColumnItems };
+  }
+
+  return {
+    leftColumnItems: filteredLeftColumnItems,
+    rightColumnItems: filteredRightColumnItems
+  };
+};
+
+const getMenuItemIDEValues = (items: MenuItem[]): IDEType[] =>
+  items.flatMap((item) => item.options?.map((option) => option.value) || [item.value as IDEType]);
 
 const getLeftColumnItems = (currencySymbol: string): MenuItem[] => {
   if (currencySymbol === 'usd') {

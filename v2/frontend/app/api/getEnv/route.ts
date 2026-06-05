@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
           | 'usd',
         enableImportFeature: process.env.ENABLE_IMPORT_FEATURE || defaultEnv.enableImportFeature,
         enableWebideFeature: process.env.ENABLE_WEBIDE_FEATURE || defaultEnv.enableWebideFeature,
+        enabledIDEs: process.env.ENABLED_IDES || defaultEnv.enabledIDEs,
         enableAdvancedConfig: process.env.ENABLE_ADVANCED_CONFIG || defaultEnv.enableAdvancedConfig,
         cpuSlideMarkList: process.env.CPU_SLIDE_MARK_LIST || defaultEnv.cpuSlideMarkList,
         memorySlideMarkList: process.env.MEMORY_SLIDE_MARK_LIST || defaultEnv.memorySlideMarkList,

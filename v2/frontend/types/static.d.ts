@@ -29,6 +29,7 @@ export interface Env {
   storageLimit: string;
   enableImportFeature: string;
   enableWebideFeature: string;
+  enabledIDEs: string;
   enableAdvancedConfig: string;
   cpuSlideMarkList: string;
   memorySlideMarkList: string;
