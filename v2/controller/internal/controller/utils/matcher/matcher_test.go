@@ -17,8 +17,10 @@ package matcher
 import (
 	"testing"
 
+	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestPodMatchExpectations(t *testing.T) {
@@ -197,5 +199,28 @@ func TestPodMatchExpectations(t *testing.T) {
 				t.Errorf("CheckPodConsistency() = %v, expected %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestStorageLimitMatcherNormalizesEquivalentQuantities(t *testing.T) {
+	matcher := StorageLimitMatcher{}
+
+	expectPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				devboxv1alpha2.AnnotationStorageLimit: "10Gi",
+			},
+		},
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				devboxv1alpha2.AnnotationStorageLimit: "10240Mi",
+			},
+		},
+	}
+
+	if !matcher.Match(expectPod, pod) {
+		t.Fatalf("StorageLimitMatcher should treat equivalent storage quantities as equal")
 	}
 }

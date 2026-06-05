@@ -100,6 +100,38 @@ func TestCreateContainer(t *testing.T) {
 	assert.Equal(t, testStorageLimit, annotations["devbox.sealos.io/storage-limit"])
 }
 
+func TestResolveStorageLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		limit string
+		want  string
+	}{
+		{
+			name:  "keeps storage limit unchanged",
+			limit: testStorageLimit,
+			want:  testStorageLimit,
+		},
+		{
+			name:  "keeps empty limit omitted",
+			limit: "",
+			want:  "",
+		},
+		{
+			name:  "preserves invalid values for existing containerd behavior",
+			limit: "bad-limit",
+			want:  "bad-limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveStorageLimit(tt.limit); got != tt.want {
+				t.Fatalf("resolveStorageLimit() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCreateContainerWithoutStorageLimit(t *testing.T) {
 	requireContainerdTestEnv(t)
 	ctx := context.Background()

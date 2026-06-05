@@ -7,6 +7,7 @@ import (
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	nodev1 "k8s.io/api/node/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -149,6 +150,37 @@ func TestEnsureCommitRecordRuntimeMetadata(t *testing.T) {
 			t.Fatalf("Snapshotter = %q", record.Snapshotter)
 		}
 	})
+}
+
+func TestGetStorageLimitInBytes(t *testing.T) {
+	devbox := &devboxv1alpha2.Devbox{
+		Spec: devboxv1alpha2.DevboxSpec{
+			StorageLimit: "50Gi",
+		},
+	}
+
+	got, err := GetStorageLimitInBytes(devbox)
+	if err != nil {
+		t.Fatalf("GetStorageLimitInBytes() error = %v", err)
+	}
+	wantQuantity := resource.MustParse("50Gi")
+	want := wantQuantity.Value()
+	if got != want {
+		t.Fatalf("GetStorageLimitInBytes() = %d, want %d", got, want)
+	}
+}
+
+func TestGeneratePodAnnotationsUsesStorageLimit(t *testing.T) {
+	devbox := &devboxv1alpha2.Devbox{
+		Spec: devboxv1alpha2.DevboxSpec{
+			StorageLimit: "50Gi",
+		},
+	}
+
+	annotations := GeneratePodAnnotations(devbox, false)
+	if got, want := annotations[devboxv1alpha2.AnnotationStorageLimit], "50Gi"; got != want {
+		t.Fatalf("storage-limit annotation = %q, want %q", got, want)
+	}
 }
 
 func TestGenerateEnvProfile(t *testing.T) {
