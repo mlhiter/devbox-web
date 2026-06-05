@@ -529,6 +529,7 @@
   "status": "Status",
   "storage": "Storage",
   "storage_capacity": "Capacity",
+  "storage_exceeds_quota": "Requested storage exceeds quota. Contact admin.",
   "submit_form_error": "Form submission error",
   "submit_release_failed": "The release request failed to be submitted",
   "submit_release_successful": "The release request was successfully submitted and is being released...",

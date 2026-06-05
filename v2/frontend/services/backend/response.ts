@@ -3,6 +3,49 @@ import { NextResponse } from 'next/server';
 import { V1Status } from '@kubernetes/client-node';
 import { ERROR_ENUM, ERROR_RESPONSE, ERROR_TEXT } from '../error';
 
+const getQuotaExceededMessageKey = (message = '') => {
+  const normalizedMessage = message.toLowerCase();
+
+  if (!normalizedMessage.includes('exceeded quota')) {
+    return '';
+  }
+
+  if (
+    normalizedMessage.includes('requests.storage') ||
+    normalizedMessage.includes('persistentvolumeclaims') ||
+    normalizedMessage.includes('requests.ephemeral-storage') ||
+    normalizedMessage.includes('limits.ephemeral-storage')
+  ) {
+    return 'storage_exceeds_quota';
+  }
+
+  if (normalizedMessage.includes('limits.cpu') || normalizedMessage.includes('requests.cpu')) {
+    return 'cpu_exceeds_quota';
+  }
+
+  if (normalizedMessage.includes('limits.memory') || normalizedMessage.includes('requests.memory')) {
+    return 'memory_exceeds_quota';
+  }
+
+  if (
+    normalizedMessage.includes('services.nodeports') ||
+    normalizedMessage.includes('count/devboxes')
+  ) {
+    return 'nodeports_exceeds_quota';
+  }
+
+  return '';
+};
+
+const isKubernetesStatusBody = (body: any) =>
+  body instanceof V1Status ||
+  (!!body &&
+    typeof body === 'object' &&
+    (typeof body.code === 'number' ||
+      typeof body.code === 'string' ||
+      typeof body.reason === 'string' ||
+      typeof body.message === 'string'));
+
 const normalizeStatusCode = (status?: number, fallback = 200) => {
   if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599) {
     return status;
@@ -38,12 +81,26 @@ export const jsonRes = <T = any>(props: {
     return NextResponse.json(mappedError, { status });
   }
   const body = error?.body;
-  if (body instanceof V1Status) {
-    if (body.message?.includes('40001:')) {
+  if (isKubernetesStatusBody(body)) {
+    const bodyMessage = typeof body.message === 'string' ? body.message : '';
+    const quotaExceededMessageKey = getQuotaExceededMessageKey(bodyMessage);
+
+    if (bodyMessage.includes('40001:')) {
       const mappedError = ERROR_RESPONSE[ERROR_ENUM.outstandingPayment];
       return NextResponse.json(mappedError, {
         status: normalizeStatusCode(mappedError.code, 402)
       });
+    } else if (quotaExceededMessageKey) {
+      const status = normalizeStatusCode(Number(body.code) || code, 403);
+      return NextResponse.json(
+        {
+          code: status,
+          statusText: bodyMessage || '',
+          message: quotaExceededMessageKey,
+          data: body
+        },
+        { status }
+      );
     } else if (body.code === 403 || body.reason === 'Forbidden') {
       const mappedError = ERROR_RESPONSE[ERROR_ENUM.insufficientPermissions];
       return NextResponse.json(mappedError, {
@@ -64,6 +121,20 @@ export const jsonRes = <T = any>(props: {
   }
 
   if (error?.statusCode && error.statusCode >= 400) {
+    const quotaExceededMessageKey = getQuotaExceededMessageKey(error.message || '');
+    if (quotaExceededMessageKey) {
+      const status = normalizeStatusCode(error.statusCode, 500);
+      return NextResponse.json(
+        {
+          code: status,
+          statusText: error.message || '',
+          message: quotaExceededMessageKey,
+          data: toSerializableError(error)
+        },
+        { status }
+      );
+    }
+
     if (error.statusCode === 403) {
       const mappedError = ERROR_RESPONSE[ERROR_ENUM.insufficientPermissions];
       return NextResponse.json(mappedError, {

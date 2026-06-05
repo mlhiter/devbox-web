@@ -530,6 +530,7 @@
   "status": "状态",
   "storage": "存储",
   "storage_capacity": "容量",
+  "storage_exceeds_quota": "申请的存储容量超出限制，请联系管理员",
   "submit_form_error": "提交表单错误",
   "submit_release_failed": "发版请求提交失败",
   "submit_release_successful": "发版请求提交成功，正在发版中......",
