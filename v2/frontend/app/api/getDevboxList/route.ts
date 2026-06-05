@@ -5,6 +5,7 @@ import { devboxDB } from '@/services/db/init';
 import { adaptDevboxListItemV2 } from '@/utils/adapt';
 import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
+import { getGpuAliasMap } from '@/services/backend/gpu';
 import { jsonRes } from '@/services/backend/response';
 import { buildFallbackTemplateSummary, collectValidTemplateIDs } from '@/utils/devboxTemplate';
 
@@ -62,7 +63,8 @@ export async function GET(req: NextRequest) {
       return [item, templateItem] as [KBDevboxTypeV2, TemplateSummary];
     });
 
-    const adaptedData = resp.map(adaptDevboxListItemV2).sort((a, b) => {
+    const gpuAliasMap = await getGpuAliasMap();
+    const adaptedData = resp.map((item) => adaptDevboxListItemV2(item, gpuAliasMap)).sort((a, b) => {
       return new Date(b.createTime).getTime() - new Date(a.createTime).getTime();
     });
 

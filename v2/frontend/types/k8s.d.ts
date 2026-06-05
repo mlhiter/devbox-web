@@ -4,7 +4,8 @@ import {
   PodStatusEnum,
   ReconfigStatus,
   gpuResourceKey,
-  devboxRemarkKey
+  devboxRemarkKey,
+  gpuTypeAnnotationKey
 } from '@/constants/devbox';
 
 // TODO: delete v2 string
@@ -79,7 +80,12 @@ export type KBDevboxTypeV2 = {
 export interface KBDevboxSpecV2 {
   runtimeClassName?: string; // devbox-runtime
   storageLimit?: string; // 10Gi
-  config: object;
+  config: {
+    annotations?: {
+      [gpuTypeAnnotationKey]?: string;
+    };
+    [key: string]: any;
+  };
   image: string;
   templateID: string;
   mergeBaseImageTopLayer?: boolean;
@@ -105,9 +111,11 @@ export interface KBDevboxSpecV2 {
     memory: string;
     'ephemeral-storage'?: string;
     [gpuResourceKey]?: string;
+    [key: string]: string | undefined;
   };
   nodeSelector?: {
     [gpuNodeSelectorKey]: string;
+    [key: string]: string | undefined;
   };
   state: DevboxStatusEnum;
   tolerations?: {

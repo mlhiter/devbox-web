@@ -2,6 +2,7 @@ import { devboxKey, ingressProtocolKey, publicDomainKey } from '@/constants/devb
 import { MockDevboxDetail } from '@/constants/mock';
 import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
+import { getGpuAliasMap } from '@/services/backend/gpu';
 import { jsonRes } from '@/services/backend/response';
 import { devboxDB } from '@/services/db/init';
 import { ProtocolType } from '@/types/devbox';
@@ -135,7 +136,11 @@ export async function GET(req: NextRequest) {
         };
       }) || [];
 
-    const data = adaptDevboxDetailV2([devboxBody, portInfos, resolvedTemplate, configMaps, pvcs]);
+    const gpuAliasMap = await getGpuAliasMap();
+    const data = adaptDevboxDetailV2(
+      [devboxBody, portInfos, resolvedTemplate, configMaps, pvcs],
+      gpuAliasMap
+    );
 
     return jsonRes({ data });
   } catch (err: any) {

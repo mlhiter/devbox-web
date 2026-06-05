@@ -3,12 +3,19 @@ export interface SourcePrice {
   memory: number;
   storage?: number;
   gpu?: {
-    alias: string;
-    type: string;
+    annotationType: string;
+    product?: string;
     price: number;
     available: number;
     count: number;
     vm: number;
+    icon?: string;
+    name?: {
+      zh?: string;
+      en?: string;
+    };
+    resource?: Record<string, string>;
+    nodes?: string[];
   }[];
 }
 
@@ -22,6 +29,7 @@ export interface Env {
   ingressSecret: string;
   registryAddr: string;
   devboxAffinityEnable: string;
+  gpuSchedulerMode: 'hami' | 'native';
   namespace: string;
   rootRuntimeNamespace: string;
   ingressDomain: string;

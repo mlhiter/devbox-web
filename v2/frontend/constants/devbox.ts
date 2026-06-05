@@ -3,12 +3,19 @@ import { DevboxDetailType, DevboxEditType, DevboxEditTypeV2 } from '@/types/devb
 export const defaultSliderKey = 'default';
 export const crLabelKey = 'sealos-devbox-cr';
 export const gpuResourceKey = 'nvidia.com/gpu';
+export const gpuTypeAnnotationKey = 'nvidia.com/use-gputype';
 export const devboxKey = 'cloud.sealos.io/devbox-manager';
 export const gpuNodeSelectorKey = 'nvidia.com/gpu.product';
 export const devboxIdKey = 'cloud.sealos.io/app-devbox-id';
 export const ingressProtocolKey = 'nginx.ingress.kubernetes.io/backend-protocol';
 export const publicDomainKey = `cloud.sealos.io/app-deploy-manager-domain`;
 export const devboxRemarkKey = 'cloud.sealos.io/remark';
+
+export const gpuSchedulerModes = ['hami', 'native'] as const;
+export type GpuSchedulerMode = (typeof gpuSchedulerModes)[number];
+
+export const normalizeGpuSchedulerMode = (mode?: string): GpuSchedulerMode =>
+  mode === 'hami' ? 'hami' : 'native';
 
 export enum LanguageTypeEnum {
   java = 'java',
@@ -302,3 +309,5 @@ export const GpuAmountMarkList = [
   { label: '7', value: 7 },
   { label: '8', value: 8 }
 ];
+
+export const GPU_AMOUNT_MAX = 8;

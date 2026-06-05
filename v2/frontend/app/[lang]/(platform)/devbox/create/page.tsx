@@ -15,8 +15,15 @@ import { patchYamlList } from '@/utils/tools';
 import { useConfirm } from '@/hooks/useConfirm';
 import { generateYamlList } from '@/utils/json2Yaml';
 import { createDevbox, updateDevbox } from '@/api/devbox';
-import type { DevboxEditTypeV2, DevboxKindsType } from '@/types/devbox';
-import { defaultDevboxEditValueV2, editModeMap } from '@/constants/devbox';
+import type { DevboxEditTypeV2, DevboxKindsType, DevboxPatchPropsType } from '@/types/devbox';
+import {
+  defaultDevboxEditValueV2,
+  editModeMap,
+  GPU_AMOUNT_MAX,
+  gpuNodeSelectorKey,
+  gpuTypeAnnotationKey,
+  YamlKindEnum
+} from '@/constants/devbox';
 
 import { useEnvStore } from '@/stores/env';
 import { useIDEStore } from '@/stores/ide';
@@ -40,6 +47,22 @@ const omitMergeBaseImageTopLayer = (formData: DevboxEditTypeV2): DevboxEditTypeV
   delete editableFormData.mergeBaseImageTopLayer;
 
   return editableFormData;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, any> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const mergeJsonMergePatch = (target: Record<string, any>, source: Record<string, any>) => {
+  Object.entries(source).forEach(([key, value]) => {
+    if (isPlainObject(value) && isPlainObject(target[key])) {
+      mergeJsonMergePatch(target[key], value);
+      return;
+    }
+
+    target[key] = value;
+  });
+
+  return target;
 };
 
 const DevboxCreatePage = () => {
@@ -103,6 +126,7 @@ const DevboxCreatePage = () => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const isEdit = useMemo(() => !!devboxName, []);
+  const maxGpuAmount = GPU_AMOUNT_MAX;
 
   const { title, applyBtnText, applyMessage, applySuccess, applyError } = editModeMap(isEdit);
 
@@ -143,12 +167,33 @@ const DevboxCreatePage = () => {
   );
 
   const countGpuInventory = useCallback(
-    (type?: string) => {
-      const available = sourcePrice?.gpu?.find((item) => item.type === type)?.available || 0;
+    (type?: string, product?: string) => {
+      if (!type) return 0;
+      const gpuItems =
+        sourcePrice?.gpu?.filter((item) =>
+          env.gpuSchedulerMode === 'native'
+            ? item.annotationType === type && item.product === product
+            : item.annotationType === type
+        ) || [];
+      const available = gpuItems.reduce((sum, item) => sum + (item.available || 0), 0);
+      const total = gpuItems.reduce((sum, item) => sum + (item.count || 0), 0);
 
-      return available;
+      if (!isEdit) {
+        return available;
+      }
+
+      const originalGpu = oldDevboxEditData.current?.gpu;
+      if (
+        !originalGpu ||
+        originalGpu.type !== type ||
+        (env.gpuSchedulerMode === 'native' && originalGpu.product !== product)
+      ) {
+        return available;
+      }
+
+      return Math.min(available + (originalGpu.amount || 0), total);
     },
-    [sourcePrice?.gpu]
+    [env.gpuSchedulerMode, isEdit, sourcePrice?.gpu]
   );
 
   useEffect(() => {
@@ -199,6 +244,52 @@ const DevboxCreatePage = () => {
   );
   const { guideConfigDevbox } = useGuideStore();
 
+  const buildGpuSchedulerCleanupPatchValue = useCallback(
+    (formData: DevboxEditTypeV2): Record<string, any> | undefined => {
+      const hasCurrentGpu = !!formData.gpu?.type;
+      const hadGpu = !!oldDevboxEditData.current?.gpu;
+
+      if (!hasCurrentGpu && !hadGpu) {
+        return undefined;
+      }
+
+      const spec: Record<string, any> = {};
+      if (hasCurrentGpu && env.gpuSchedulerMode === 'native') {
+        spec.nodeSelector = {
+          [gpuNodeSelectorKey]: formData.gpu?.product
+        };
+      } else if (!hasCurrentGpu || env.gpuSchedulerMode === 'hami') {
+        spec.nodeSelector = {
+          [gpuNodeSelectorKey]: null
+        };
+      }
+
+      if (hasCurrentGpu && env.gpuSchedulerMode === 'hami') {
+        spec.config = {
+          annotations: {
+            [gpuTypeAnnotationKey]: formData.gpu?.type
+          }
+        };
+      } else if (!hasCurrentGpu || env.gpuSchedulerMode === 'native') {
+        spec.config = {
+          annotations: {
+            [gpuTypeAnnotationKey]: null
+          }
+        };
+      }
+
+      return Object.keys(spec).length > 0
+        ? {
+            metadata: {
+              name: formData.name
+            },
+            spec
+          }
+        : undefined;
+    },
+    [env.gpuSchedulerMode]
+  );
+
   const submitSuccess = async (formData: DevboxEditTypeV2) => {
     if (!guideConfigDevbox) {
       return router.push('/devbox/detail/devbox-mock');
@@ -206,7 +297,15 @@ const DevboxCreatePage = () => {
 
     // gpu inventory check
     if (formData.gpu?.type) {
-      const inventory = countGpuInventory(formData.gpu?.type);
+      if (env.gpuSchedulerMode === 'native' && !formData.gpu.product) {
+        return toast.warning(t('submit_form_error'));
+      }
+
+      if (formData.gpu.amount > maxGpuAmount) {
+        return toast.warning(t('Gpu amount over max Tip', { max: maxGpuAmount }));
+      }
+
+      const inventory = countGpuInventory(formData.gpu.type, formData.gpu.product);
       if (formData.gpu?.amount > inventory) {
         return toast.warning(
           t('Gpu under inventory Tip', {
@@ -225,17 +324,34 @@ const DevboxCreatePage = () => {
       const areYamlListsEqual =
         new Set(parsedNewYamlList).size === new Set(parsedOldYamlList).size &&
         [...new Set(parsedNewYamlList)].every((item) => new Set(parsedOldYamlList).has(item));
-      if (areYamlListsEqual) {
-        return toast.info(t('No changes detected'));
-      }
       if (!parsedNewYamlList) {
         return toast.warning(t('submit_form_error'));
+      }
+      const cleanupPatchValue = buildGpuSchedulerCleanupPatchValue(formData);
+      if (areYamlListsEqual && !cleanupPatchValue) {
+        return toast.info(t('No changes detected'));
       }
       const patch = patchYamlList({
         parsedOldYamlList: parsedOldYamlList,
         parsedNewYamlList: parsedNewYamlList,
         originalYamlList: crOldYamls.current
       });
+      if (cleanupPatchValue) {
+        const devboxPatch = patch.find(
+          (item): item is Extract<DevboxPatchPropsType[number], { type: 'patch' }> =>
+            item.type === 'patch' && item.kind === YamlKindEnum.Devbox
+        );
+
+        if (devboxPatch) {
+          mergeJsonMergePatch(devboxPatch.value, cleanupPatchValue);
+        } else {
+          patch.push({
+            type: 'patch',
+            kind: YamlKindEnum.Devbox,
+            value: cleanupPatchValue
+          });
+        }
+      }
       await executeOperation(
         () =>
           updateDevbox({

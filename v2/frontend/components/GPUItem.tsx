@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
 
 import { cn } from '@labring/sealos-ui';
@@ -9,12 +9,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@labring/sealos-ui/tool
 
 const GPUItem = ({ gpu, className }: { gpu?: GpuType; className?: string }) => {
   const t = useTranslations();
+  const locale = useLocale();
   const { sourcePrice } = usePriceStore();
 
   const gpuAlias = useMemo(() => {
-    const gpuItem = sourcePrice?.gpu?.find((item) => item.type === gpu?.type);
-    return gpuItem?.alias || gpu?.type || '';
-  }, [gpu?.type, sourcePrice?.gpu]);
+    const gpuItem = sourcePrice?.gpu?.find(
+      (item) =>
+        item.annotationType === gpu?.type &&
+        (!gpu?.product || !item.product || item.product === gpu.product)
+    );
+    const localizedName = locale.includes('zh') ? gpuItem?.name?.zh : gpuItem?.name?.en;
+    return localizedName || gpuItem?.name?.zh || gpuItem?.name?.en || gpu?.type || '';
+  }, [gpu?.product, gpu?.type, locale, sourcePrice?.gpu]);
 
   const content = (
     <div className={cn('flex max-w-full items-center text-sm text-zinc-600', className)}>
