@@ -7,6 +7,7 @@ import { getK8s } from '@/services/backend/kubernetes';
 import { jsonRes } from '@/services/backend/response';
 import { KubeFileSystem } from '@/utils/kubeFileSystem';
 import { sleep, DEVBOX_IMPORT_CONSTANTS } from '@/utils/devboxImportHelper';
+import { normalizeStartupCommand } from '@/utils/importCommandGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -339,6 +340,9 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('Creating entrypoint.sh...');
+    const normalizedStartupCommand = normalizeStartupCommand(
+      startupCommand || 'echo "No startup command specified"'
+    );
     const createEntrypointCommand = `
 set -e
 cd /home/devbox/project
@@ -346,7 +350,7 @@ cat > /home/devbox/project/entrypoint.sh << 'ENTRYPOINT_EOF'
 #!/bin/bash
 set -e
 cd /home/devbox/project
-${startupCommand || 'echo "No startup command specified"'}
+${normalizedStartupCommand}
 ENTRYPOINT_EOF
 chown devbox:devbox /home/devbox/project/entrypoint.sh
 chmod +x /home/devbox/project/entrypoint.sh
