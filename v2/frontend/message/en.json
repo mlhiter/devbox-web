@@ -614,5 +614,6 @@
   "custom_domain_error_timeout": "Domain verification timed out. Try again later.",
   "custom_domain_save_tip": "Click Update in the upper-right corner to save the network configuration.",
   "custom_domain_verified": "Domain verified",
-  "custom_domain_verify_failed": "Domain verification failed"
+  "custom_domain_verify_failed": "Domain verification failed",
+  "devbox_ready_timeout": "Devbox failed to become ready within timeout. Please try again later."
 }
