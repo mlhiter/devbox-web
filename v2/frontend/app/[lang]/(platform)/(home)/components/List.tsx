@@ -15,7 +15,7 @@ import {
 } from '@tanstack/react-table';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
-import { useCallback, useMemo, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 
 import { useRouter } from '@/i18n';
 import { useDateTimeStore } from '@/stores/date';
@@ -289,6 +289,25 @@ const DevboxList = ({
     // NOTE: this option may cause some bug,but the probability is very small,maybe we should test it carefully.
     autoResetPageIndex: false
   });
+
+  const filterSnapshot = useMemo(
+    () =>
+      [
+        searchQuery.toLowerCase(),
+        [...statusFilter].sort().join(','),
+        startDateTime.getTime(),
+        endDateTime.getTime()
+      ].join('|'),
+    [searchQuery, statusFilter, startDateTime, endDateTime]
+  );
+  const previousFilterSnapshotRef = useRef(filterSnapshot);
+
+  useEffect(() => {
+    if (previousFilterSnapshotRef.current !== filterSnapshot) {
+      table.setPageIndex(0);
+      previousFilterSnapshotRef.current = filterSnapshot;
+    }
+  }, [filterSnapshot, table]);
 
   return (
     <>
