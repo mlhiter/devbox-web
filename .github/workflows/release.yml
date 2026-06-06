@@ -532,7 +532,7 @@ jobs:
         run: cp deploy/manifests/deploy.yaml dist-${{ matrix.target }}-controller-install.yaml
 
       - name: Upload manifest artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: ${{ matrix.target }}-controller-install
           path: ${{ matrix.workdir }}/dist-${{ matrix.target }}-controller-install.yaml
@@ -559,7 +559,7 @@ jobs:
         run: make build/release
 
       - name: Upload cri-shim artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: v1-cri-shim-binaries
           path: v1/cri-shim/bin/*
@@ -591,7 +591,7 @@ jobs:
         run: make build TARGETARCH=${{ matrix.target_arch }}
 
       - name: Upload server artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: v2-server-binaries-${{ matrix.target_arch }}
           path: v2/server/bin/devbox-api-${{ matrix.target_arch }}
@@ -618,7 +618,7 @@ jobs:
           tar -C "$workdir" -czf /tmp/httpgate-chart/devbox-v2-httpgate-chart-${{ github.ref_name }}.tgz httpgate
 
       - name: Upload httpgate chart artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: v2-httpgate-chart
           path: /tmp/httpgate-chart/devbox-v2-httpgate-chart-${{ github.ref_name }}.tgz
@@ -645,7 +645,7 @@ jobs:
           tar -C "$workdir" -czf /tmp/sshgate-chart/devbox-v2-sshgate-chart-${{ github.ref_name }}.tgz sshgate
 
       - name: Upload sshgate chart artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: v2-sshgate-chart
           path: /tmp/sshgate-chart/devbox-v2-sshgate-chart-${{ github.ref_name }}.tgz
@@ -667,7 +667,7 @@ jobs:
           rm v2/server/dist-v2-server-deploy.yaml.bak
 
       - name: Upload server manifest artifact
-        uses: actions/upload-artifact@v4
+        uses: namespace-actions/upload-artifact@v1
         with:
           name: v2-server-manifest
           path: v2/server/dist-v2-server-deploy.yaml
@@ -689,7 +689,7 @@ jobs:
       - v2-server-manifest
     steps:
       - name: Download manifest artifacts
-        uses: actions/download-artifact@v5
+        uses: namespace-actions/download-artifact@v2
         with:
           path: artifacts
 
