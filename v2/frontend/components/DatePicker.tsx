@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@labring/sealos-ui/popo
 interface DatePickerProps extends React.HTMLAttributes<HTMLDivElement> {
   isDisabled?: boolean;
   onClose?: () => void;
+  showAllTime?: boolean;
 }
 
 interface RecentDate {
@@ -34,7 +35,13 @@ interface RecentDate {
   compareValue: string;
 }
 
-const DatePicker = ({ isDisabled = false, onClose, className, ...props }: DatePickerProps) => {
+const DatePicker = ({
+  isDisabled = false,
+  onClose,
+  showAllTime = true,
+  className,
+  ...props
+}: DatePickerProps) => {
   const t = useTranslations();
   const currentLang = useLocale();
 
@@ -48,16 +55,8 @@ const DatePicker = ({ isDisabled = false, onClose, className, ...props }: DatePi
     to: endDateTime
   };
 
-  const recentDateList = useMemo(
-    () => [
-      {
-        label: `${t('all_time')}`,
-        value: {
-          from: new Date('1970-01-01T00:00:00Z'),
-          to: new Date()
-        },
-        compareValue: 'all'
-      },
+  const recentDateList = useMemo(() => {
+    const baseRecentDateList = [
       {
         label: `${t('recently')} 5 ${t('minute')}`,
         value: getDateRange('5m'),
@@ -108,9 +107,24 @@ const DatePicker = ({ isDisabled = false, onClose, className, ...props }: DatePi
         value: getDateRange('7d'),
         compareValue: '7d'
       }
-    ],
-    [t]
-  );
+    ];
+
+    if (!showAllTime) {
+      return baseRecentDateList;
+    }
+
+    return [
+      {
+        label: `${t('all_time')}`,
+        value: {
+          from: new Date('1970-01-01T00:00:00Z'),
+          to: new Date()
+        },
+        compareValue: 'all'
+      },
+      ...baseRecentDateList
+    ];
+  }, [showAllTime, t]);
 
   const defaultRecentDate = useMemo(() => {
     const currentTimeRange = formatTimeRange(startDateTime, endDateTime);
@@ -118,6 +132,12 @@ const DatePicker = ({ isDisabled = false, onClose, className, ...props }: DatePi
       recentDateList.find((item) => item.compareValue === currentTimeRange) || recentDateList[0]
     );
   }, [startDateTime, endDateTime, recentDateList]);
+  const resetRecentDate = useMemo(
+    () =>
+      recentDateList.find((item) => item.compareValue === (showAllTime ? 'all' : '7d')) ||
+      recentDateList[0],
+    [recentDateList, showAllTime]
+  );
 
   const [inputState, setInputState] = useState<0 | 1>(0);
   const [recentDate, setRecentDate] = useState<RecentDate>(defaultRecentDate);
@@ -430,8 +450,8 @@ const DatePicker = ({ isDisabled = false, onClose, className, ...props }: DatePi
                 variant="outline"
                 className="h-8"
                 onClick={() => {
-                  setRecentDate(recentDateList[0]);
-                  handleRecentDateClick(recentDateList[0]);
+                  setRecentDate(resetRecentDate);
+                  handleRecentDateClick(resetRecentDate);
                 }}
               >
                 {t('reset')}
