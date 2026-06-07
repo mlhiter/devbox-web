@@ -91,7 +91,8 @@ const DevboxList = ({
     handleStartDevbox,
     handleGoToTerminal,
     errorModalState,
-    closeErrorModal
+    closeErrorModal,
+    RestartConfirmChild
   } = useControlDevbox(refetchDevboxList);
 
   const { startDateTime: dateRangeStart } = useDateTimeStore();
@@ -439,6 +440,7 @@ const DevboxList = ({
         errorCode={errorModalState.errorCode}
         errorMessage={errorModalState.errorMessage}
       />
+      <RestartConfirmChild />
     </>
   );
 };

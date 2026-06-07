@@ -34,7 +34,8 @@ const Header = ({ refetchDevboxDetail }: HeaderProps) => {
     handleStartDevbox,
     handleGoToTerminal,
     errorModalState,
-    closeErrorModal
+    closeErrorModal,
+    RestartConfirmChild
   } = useControlDevbox(refetchDevboxDetail);
 
   const [onOpenShutdown, setOnOpenShutdown] = useState(false);
@@ -191,6 +192,7 @@ const Header = ({ refetchDevboxDetail }: HeaderProps) => {
         errorCode={errorModalState.errorCode}
         errorMessage={errorModalState.errorMessage}
       />
+      <RestartConfirmChild />
     </div>
   );
 };

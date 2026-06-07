@@ -79,6 +79,7 @@
   "confirm": "Confirm",
   "confirm_create_devbox": "Confirm creation of your DevBox?",
   "confirm_delete": "Delete",
+  "confirm_restart_devbox": "Restarting will interrupt current IDE and terminal connections. Save your work before continuing.",
   "confirm_shutdown": "Shutdown",
   "confirm_shutdown_question": "Are you sure you want to shutdown?",
   "confirm_update_and_restart": "Update and restart",

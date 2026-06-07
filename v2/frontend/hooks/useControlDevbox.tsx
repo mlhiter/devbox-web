@@ -9,11 +9,18 @@ import { restartDevbox, startDevbox } from '@/api/devbox';
 import { track } from '@labring/sealos-gtm-sdk';
 import { DevboxStatusEnum } from '@/constants/devbox';
 import { useDevboxOperation } from '@/hooks/useDevboxOperation';
+import { useConfirm } from '@/hooks/useConfirm';
 
 export const useControlDevbox = (refetchDevboxData: () => void) => {
   const { isOutStandingPayment } = useUserStore();
   const t = useTranslations();
   const { executeOperation, errorModalState, closeErrorModal } = useDevboxOperation();
+  const { openConfirm, ConfirmChild: RestartConfirmChild } = useConfirm({
+    title: 'prompt',
+    content: 'confirm_restart_devbox',
+    confirmText: 'restart',
+    cancelText: 'cancel'
+  });
 
   const refetchThreeTimes = useCallback(() => {
     refetchDevboxData();
@@ -25,7 +32,7 @@ export const useControlDevbox = (refetchDevboxData: () => void) => {
     }, 3000);
   }, [refetchDevboxData]);
 
-  const handleRestartDevbox = useCallback(
+  const restartDevboxWithFeedback = useCallback(
     async (devbox: DevboxListItemTypeV2 | DevboxDetailTypeV2) => {
       if (isOutStandingPayment) {
         toast.error(t('start_outstanding_tips'));
@@ -44,6 +51,13 @@ export const useControlDevbox = (refetchDevboxData: () => void) => {
       });
     },
     [refetchThreeTimes, t, isOutStandingPayment, executeOperation]
+  );
+
+  const handleRestartDevbox = useCallback(
+    (devbox: DevboxListItemTypeV2 | DevboxDetailTypeV2) => {
+      openConfirm(() => restartDevboxWithFeedback(devbox))();
+    },
+    [openConfirm, restartDevboxWithFeedback]
   );
 
   const handleStartDevbox = useCallback(
@@ -109,6 +123,7 @@ export const useControlDevbox = (refetchDevboxData: () => void) => {
     handleStartDevbox,
     handleGoToTerminal,
     errorModalState,
-    closeErrorModal
+    closeErrorModal,
+    RestartConfirmChild
   };
 };
