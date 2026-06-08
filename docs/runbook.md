@@ -103,10 +103,11 @@ SSHGATE_IMAGE=ghcr.io/sealos-apps/devbox-v2-sshgate:test \
 ```
 
 `prepare-package.sh` creates the ignored `v2/deploy/components/` directory.
-CI runs `sealos registry save --registry-dir=registry_<arch> --arch <arch> .`
-from `v2/deploy`, then builds `v2/deploy/Kubefile` as `devbox-v2-cluster`.
-The package includes controller, frontend, httpgate, and sshgate; server is
-still published as the separate `v2/server` deployment manifest artifact.
+CI explicitly passes the same controller, frontend, httpgate, and sshgate image
+refs to `sealos registry save --images=...`, then builds `v2/deploy/Kubefile`
+as `devbox-v2-cluster`. The package includes controller, frontend, httpgate,
+and sshgate; server is still published as the separate `v2/server` deployment
+manifest artifact.
 
 ## Troubleshooting
 

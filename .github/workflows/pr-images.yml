@@ -300,13 +300,21 @@ jobs:
         run: |
           set -euo pipefail
           PR_TAG="${{ steps.meta.outputs.pr_tag }}"
-          CONTROLLER_IMAGE="${LOCAL_REGISTRY}/devbox-v2-controller:${PR_TAG}" \
-            FRONTEND_IMAGE="${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}" \
-            HTTPGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-httpgate:${PR_TAG}" \
-            SSHGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-sshgate:${PR_TAG}" \
-            ./scripts/prepare-package.sh
+          CONTROLLER_IMAGE="${LOCAL_REGISTRY}/devbox-v2-controller:${PR_TAG}"
+          FRONTEND_IMAGE="${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}"
+          HTTPGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-httpgate:${PR_TAG}"
+          SSHGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-sshgate:${PR_TAG}"
+          export CONTROLLER_IMAGE FRONTEND_IMAGE HTTPGATE_IMAGE SSHGATE_IMAGE
+
+          ./scripts/prepare-package.sh
           ./scripts/lint-package.sh
-          sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
+          sudo sealos registry save \
+            --registry-dir=registry_${{ matrix.arch }} \
+            --arch ${{ matrix.arch }} \
+            --images="${CONTROLLER_IMAGE}" \
+            --images="${FRONTEND_IMAGE}" \
+            --images="${HTTPGATE_IMAGE}" \
+            --images="${SSHGATE_IMAGE}"
 
       - name: Build cluster image
         uses: docker/build-push-action@v6

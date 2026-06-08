@@ -492,13 +492,21 @@ jobs:
         run: |
           set -euo pipefail
           sudo sealos login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
-          CONTROLLER_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-controller:${GITHUB_REF_NAME}" \
-            FRONTEND_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend:${GITHUB_REF_NAME}" \
-            HTTPGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-httpgate:${GITHUB_REF_NAME}" \
-            SSHGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-sshgate:${GITHUB_REF_NAME}" \
-            ./scripts/prepare-package.sh
+          CONTROLLER_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-controller:${GITHUB_REF_NAME}"
+          FRONTEND_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend:${GITHUB_REF_NAME}"
+          HTTPGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-httpgate:${GITHUB_REF_NAME}"
+          SSHGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-sshgate:${GITHUB_REF_NAME}"
+          export CONTROLLER_IMAGE FRONTEND_IMAGE HTTPGATE_IMAGE SSHGATE_IMAGE
+
+          ./scripts/prepare-package.sh
           ./scripts/lint-package.sh
-          sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
+          sudo sealos registry save \
+            --registry-dir=registry_${{ matrix.arch }} \
+            --arch ${{ matrix.arch }} \
+            --images="${CONTROLLER_IMAGE}" \
+            --images="${FRONTEND_IMAGE}" \
+            --images="${HTTPGATE_IMAGE}" \
+            --images="${SSHGATE_IMAGE}"
 
       - name: Build and push cluster image
         run: |
