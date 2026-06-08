@@ -81,7 +81,6 @@ func main() {
 	var registryAddr string
 	var registryUser string
 	var registryPassword string
-	var registryInsecure bool
 	// resource flag
 	var requestCPURate float64
 	var requestMemoryRate float64
@@ -163,12 +162,6 @@ func main() {
 		"registry-password",
 		"passw0rd",
 		"The password of the registry",
-	)
-	flag.BoolVar(
-		&registryInsecure,
-		"registry-insecure",
-		commit.InsecureRegistry,
-		"Allow plain HTTP and skip TLS verification when accessing the registry",
 	)
 	// resource flag
 	flag.Float64Var(
@@ -454,8 +447,7 @@ func main() {
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
 			Registry: registry.Registry{
-				Host:     registryAddr,
-				Insecure: registryInsecure,
+				Host: registryAddr,
 				BasicAuth: registry.BasicAuth{
 					Username: registryUser,
 					Password: registryPassword,

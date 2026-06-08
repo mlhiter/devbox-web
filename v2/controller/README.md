@@ -38,28 +38,6 @@ make deploy IMG=ghcr.io/sealos-apps/devbox-v2-controller:<tag>
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
 
-### Registry retag during DevBox release
-
-The normal DevBox release flow creates a `DevBoxRelease` custom resource. The
-controller then re-tags the committed image from `status.sourceImage` to
-`status.targetImage`; this is separate from the Next.js template repository
-retag route used by template create/update.
-
-Registry access is configured with:
-
-```sh
---registry-addr=<registry host>
---registry-user=<registry username>
---registry-password=<registry password>
---registry-insecure=true
-```
-
-`--registry-insecure` defaults to `true` to match the controller's internal
-commit/push path. Keep it enabled for internal registries that return Bearer
-token challenges or use cluster-local/self-signed TLS certificates. A successful
-smoke check should show the `DevBoxRelease` phase as `Success` and the target
-manifest returning HTTP 200 from the registry.
-
 **Create instances of your solution**
 You can apply the samples (examples) from the config/sample:
 
