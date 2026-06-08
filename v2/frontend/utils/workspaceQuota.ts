@@ -24,8 +24,12 @@ export const isWorkspaceQuotaBridgeUnsupported = (error: unknown) => {
 };
 
 export const createQuotaCompatibleSealosApp = <T extends WorkspaceQuotaSealosApp>(
-  sealosApp: T
-): T => {
+  sealosApp: T | null | undefined
+): T | undefined => {
+  if (!sealosApp || (typeof sealosApp !== 'object' && typeof sealosApp !== 'function')) {
+    return undefined;
+  }
+
   return new Proxy(sealosApp, {
     get(target, property, receiver) {
       if (property === 'getWorkspaceQuota') {

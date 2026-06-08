@@ -1,7 +1,7 @@
 'use client';
 
 import throttle from 'lodash/throttle';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { EVENT_NAME } from '@labring/sealos-desktop-sdk';
 import { usePathname, useRouter } from '@/i18n';
 import { useSearchParams } from 'next/navigation';
@@ -41,8 +41,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
 
   const [init, setInit] = useState(false);
   const [refresh, setRefresh] = useState(false);
+  const [quotaCompatibleSealosApp, setQuotaCompatibleSealosApp] = useState<typeof sealosApp>();
   const locale = useLocale();
-  const quotaCompatibleSealosApp = useMemo(() => createQuotaCompatibleSealosApp(sealosApp), []);
 
   const getSession = useCallback(() => {
     return useUserStore.getState().session ?? null;
@@ -51,6 +51,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   // init session
   useEffect(() => {
     const response = createSealosApp();
+    setQuotaCompatibleSealosApp(createQuotaCompatibleSealosApp(sealosApp));
     (async () => {
       try {
         const newSession = JSON.stringify(await sealosApp.getSession());
