@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strings"
+
 	devboxv1alpha2 "github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -8,6 +10,11 @@ import (
 )
 
 func defaultCreateDevboxSpec(resourceCfg CreateDevboxResourceConfig) devboxv1alpha2.DevboxSpec {
+	runtimeClassName := strings.TrimSpace(resourceCfg.RuntimeClassName)
+	if runtimeClassName == "" {
+		runtimeClassName = defaultCreateRuntimeClassName
+	}
+
 	return devboxv1alpha2.DevboxSpec{
 		State: devboxv1alpha2.DevboxStateRunning,
 		Resource: corev1.ResourceList{
@@ -58,7 +65,7 @@ func defaultCreateDevboxSpec(resourceCfg CreateDevboxResourceConfig) devboxv1alp
 				},
 			},
 		},
-		RuntimeClassName: "devbox-runtime",
+		RuntimeClassName: runtimeClassName,
 		Tolerations: []corev1.Toleration{
 			{
 				Key:      "devbox.sealos.io/node",

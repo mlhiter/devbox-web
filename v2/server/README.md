@@ -39,6 +39,7 @@ Key sections:
 - `gateway.port`: 应用网关默认端口，默认 `1317`
 - `devbox.createDefaults.image`: default created devbox image
 - `devbox.createDefaults.storageLimit`: default created devbox storage limit
+- `devbox.createDefaults.runtimeClassName`: default created devbox RuntimeClass name
 - `devbox.createDefaults.resource.cpu`: default created devbox CPU
 - `devbox.createDefaults.resource.memory`: default created devbox memory
 
@@ -142,6 +143,6 @@ Create request example:
 }
 ```
 
-The service uses a built-in devbox spec template, and reads default values (`image`, `cpu`, `memory`, `storageLimit`) from the YAML config file.
+The service uses a built-in devbox spec template, and reads default values (`image`, `cpu`, `memory`, `storageLimit`, `runtimeClassName`) from the YAML config file.
 Namespace is always derived from JWT claim `namespace`.
 If `kubeAccess.enabled=true`, the created Devbox will carry `spec.kubeAccess`, and the controller will provision the kube ServiceAccount/Role/RoleBinding plus projected token mount for the pod.

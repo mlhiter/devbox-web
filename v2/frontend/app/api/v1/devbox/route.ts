@@ -513,7 +513,7 @@ export async function POST(req: NextRequest) {
     }
 
     const resourceConfig = convertResourceConfig(resourceSource);
-    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT } = process.env;
+    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, DEVBOX_RUNTIME_CLASS_NAME } = process.env;
     const devbox = json2Devbox(
       {
         ...devboxForm,
@@ -525,7 +525,9 @@ export async function POST(req: NextRequest) {
         env: devboxForm.env || []
       },
       DEVBOX_AFFINITY_ENABLE,
-      STORAGE_LIMIT
+      STORAGE_LIMIT,
+      undefined,
+      DEVBOX_RUNTIME_CLASS_NAME
     );
 
     const [devboxBody, createdPorts] = await Promise.all([

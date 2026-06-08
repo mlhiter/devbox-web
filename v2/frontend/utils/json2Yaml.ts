@@ -26,7 +26,8 @@ export const json2Devbox = (
   data: Omit<json2DevboxData, 'templateRepositoryUid'>,
   devboxAffinityEnable: string = 'true',
   storageLimit: string = '10Gi',
-  gpuSchedulerMode: string = 'native'
+  gpuSchedulerMode: string = 'native',
+  runtimeClassName: string = 'devbox-runtime'
 ) => {
   const resolvedStorageLimit = normalizeStorageLimit(data.storageLimit || storageLimit);
   const normalizedGpuSchedulerMode = normalizeGpuSchedulerMode(gpuSchedulerMode);
@@ -166,7 +167,7 @@ export const json2Devbox = (
         draft.volumeMounts = newVolumeMounts.length > 0 ? newVolumeMounts : undefined;
       }),
       state: 'Running',
-      runtimeClassName: 'devbox-runtime',
+      runtimeClassName: runtimeClassName || 'devbox-runtime',
       storageLimit: resolvedStorageLimit
     }
   };
@@ -484,6 +485,7 @@ export const generateYamlList = (
     devboxAffinityEnable?: string;
     storageLimit?: string;
     gpuSchedulerMode?: string;
+    runtimeClassName?: string;
     ingressSecret: string;
     nfsStorageClassName?: string;
   }
@@ -511,7 +513,13 @@ export const generateYamlList = (
       : []),
     {
       filename: 'devbox.yaml',
-      value: json2Devbox(data, env.devboxAffinityEnable, env.storageLimit, env.gpuSchedulerMode)
+      value: json2Devbox(
+        data,
+        env.devboxAffinityEnable,
+        env.storageLimit,
+        env.gpuSchedulerMode,
+        env.runtimeClassName
+      )
     },
     ...(data.networks.length > 0
       ? [

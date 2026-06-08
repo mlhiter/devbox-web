@@ -8,6 +8,7 @@ import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
 import type { DevboxEditTypeV2, DevboxKindsType } from '@/types/devbox';
 import { generateYamlList } from '@/utils/json2Yaml';
+import { preserveExistingRuntimeClassName } from '@/utils/runtimeClassName';
 import { patchYamlList } from '@/utils/tools';
 
 export const dynamic = 'force-dynamic';
@@ -31,10 +32,12 @@ export async function POST(req: NextRequest) {
 
     const newYamlList = generateYamlList(newEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
+      runtimeClassName: process.env.DEVBOX_RUNTIME_CLASS_NAME,
       ingressSecret: process.env.INGRESS_SECRET!
     });
     const oldYamlList = generateYamlList(oldEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
+      runtimeClassName: process.env.DEVBOX_RUNTIME_CLASS_NAME,
       ingressSecret: process.env.INGRESS_SECRET!
     });
 
@@ -83,16 +86,21 @@ export async function POST(req: NextRequest) {
       }
     > = {
       [YamlKindEnum.Devbox]: {
-        patch: (jsonPatch: Object) => {
+        patch: async (jsonPatch: Record<string, any>) => {
           // @ts-ignore
           const name = jsonPatch?.metadata?.name;
+          const safePatch = await preserveExistingRuntimeClassName({
+            jsonPatch,
+            k8sCustomObjects,
+            namespace
+          });
           return k8sCustomObjects.patchNamespacedCustomObject(
             'devbox.sealos.io',
             'v1alpha2',
             namespace,
             'devboxes',
             name,
-            jsonPatch,
+            safePatch,
             undefined,
             undefined,
             undefined,

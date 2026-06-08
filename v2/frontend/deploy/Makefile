@@ -17,6 +17,8 @@ lint:
 	@grep -q -- 'vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local' /tmp/devbox-v2-frontend-rendered.yaml
 	@grep -q -- 'name: STORAGE_LIMIT' /tmp/devbox-v2-frontend-rendered.yaml
 	@grep -q -- 'value: "20Gi"' /tmp/devbox-v2-frontend-rendered.yaml
+	@grep -q -- 'name: DEVBOX_RUNTIME_CLASS_NAME' /tmp/devbox-v2-frontend-rendered.yaml
+	@grep -q -- 'value: "devbox-runtime"' /tmp/devbox-v2-frontend-rendered.yaml
 	@grep -q -- 'secretRef:' /tmp/devbox-v2-frontend-rendered.yaml
 	@grep -q -- 'name: APP_LAUNCHPAD_URL' /tmp/devbox-v2-frontend-rendered.yaml
 	@grep -q -- 'name: GPU_SCHEDULER_MODE' /tmp/devbox-v2-frontend-rendered.yaml

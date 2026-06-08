@@ -46,6 +46,7 @@ Common v2 frontend settings include:
 - `REGISTRY_ADDR`, `REGISTRY_USER`, `REGISTRY_PASSWORD`
 - `GPU_ENABLE`
 - `GPU_SCHEDULER_MODE`, with `native` and `hami` supported
+- `DEVBOX_RUNTIME_CLASS_NAME`, the RuntimeClass written by v2 frontend create flows; default `devbox-runtime`, with `devbox-stargz-runtime` available when the cluster has the matching runtime handler and snapshotter
 - `ENABLED_IDES`
 - `ENABLE_ADVANCED_CONFIG`; set it to `true` to show advanced env and ConfigMap editing in the frontend
 - `STORAGE_LIMIT`
@@ -77,6 +78,8 @@ make test
 make build
 ```
 
+The v2 server reads create defaults from its YAML config. `devbox.createDefaults.runtimeClassName` controls the RuntimeClass written by server-side create requests and defaults to `devbox-runtime`.
+
 Gateway checks:
 
 ```bash
@@ -92,6 +95,7 @@ make build
 ## Troubleshooting
 
 - GPU inventory missing: check `GPU_ENABLE`, `GPU_SCHEDULER_MODE`, and the `node-system/node-gpu-info` ConfigMap.
+- DevBox pods fail after changing RuntimeClass: confirm the cluster has the matching RuntimeClass, runtime handler, and snapshotter installed; the controller manifest creates the RuntimeClass objects, but node runtime support must exist separately.
 - Quota errors look like permissions errors: inspect `services/backend/response.ts` mapping and the raw Kubernetes status message.
 - Advanced env or ConfigMap UI missing: check `/api/getEnv` and confirm `enableAdvancedConfig` is `true`, then verify the Deployment has `ENABLE_ADVANCED_CONFIG=true`.
 - ConfigMap edits do not appear in the workspace: restart the DevBox after update.

@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         ingressSecret: process.env.INGRESS_SECRET || defaultEnv.ingressSecret,
         registryAddr: process.env.REGISTRY_ADDR || defaultEnv.registryAddr,
         devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE || defaultEnv.devboxAffinityEnable,
+        runtimeClassName: process.env.DEVBOX_RUNTIME_CLASS_NAME || defaultEnv.runtimeClassName,
         gpuSchedulerMode: normalizeGpuSchedulerMode(process.env.GPU_SCHEDULER_MODE),
         storageLimit: process.env.STORAGE_LIMIT || defaultEnv.storageLimit,
         namespace: namespace || defaultEnv.namespace,

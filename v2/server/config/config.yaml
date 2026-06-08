@@ -70,6 +70,9 @@ devbox:
     # Storage limit for newly created devbox.
     storageLimit: "10Gi"
 
+    # RuntimeClass name for newly created devbox.
+    runtimeClassName: "devbox-runtime"
+
     resource:
       # CPU limit for newly created devbox.
       cpu: "200m"

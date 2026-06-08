@@ -60,8 +60,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { INGRESS_SECRET, DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, NFS_STORAGE_CLASS_NAME } =
-      process.env;
+    const {
+      INGRESS_SECRET,
+      DEVBOX_AFFINITY_ENABLE,
+      STORAGE_LIMIT,
+      DEVBOX_RUNTIME_CLASS_NAME,
+      NFS_STORAGE_CLASS_NAME
+    } = process.env;
     const templateDefaults = getTemplateDefaults(template.config);
     const finalDevboxForm = {
       ...devboxForm,
@@ -78,7 +83,13 @@ export async function POST(req: NextRequest) {
     const configMap = json2ConfigMap(finalDevboxForm);
 
     // Create Devbox, Service, and Ingress
-    const devbox = json2Devbox(finalDevboxForm, DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT);
+    const devbox = json2Devbox(
+      finalDevboxForm,
+      DEVBOX_AFFINITY_ENABLE,
+      STORAGE_LIMIT,
+      undefined,
+      DEVBOX_RUNTIME_CLASS_NAME
+    );
     const service = json2Service(finalDevboxForm);
     const ingress = json2Ingress(finalDevboxForm, INGRESS_SECRET as string);
 

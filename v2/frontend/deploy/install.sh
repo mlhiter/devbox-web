@@ -173,6 +173,7 @@ metrics_url="$(value_or_default "${metrics_url}" "http://vmselect-vm-stack-victo
 
 app_launchpad_url="$(value_or_default "${appLaunchpadUrl:-${APP_LAUNCHPAD_URL:-}}" "http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha")"
 storage_limit="$(value_or_default "${storageLimit:-${STORAGE_LIMIT:-}}" "20Gi")"
+runtime_class_name="$(value_or_default "${runtimeClassName:-${DEVBOX_RUNTIME_CLASS_NAME:-}}" "devbox-runtime")"
 storage_default="$(value_or_default "${storageDefault:-${STORAGE_DEFAULT:-}}" "20")"
 enable_advanced_config="$(value_or_default "${enableAdvancedConfig:-${ENABLE_ADVANCED_CONFIG:-}}" "true")"
 gpu_scheduler_mode="$(value_or_default "${gpuSchedulerMode:-${GPU_SCHEDULER_MODE:-}}" "native")"
@@ -199,6 +200,7 @@ helm_set_args=(
   --set-string "frontend.env.metricsUrl=${metrics_url}"
   --set-string "frontend.env.appLaunchpadUrl=${app_launchpad_url}"
   --set-string "frontend.env.storageLimit=${storage_limit}"
+  --set-string "frontend.env.runtimeClassName=${runtime_class_name}"
   --set-string "frontend.env.storageDefault=${storage_default}"
   --set-string "frontend.env.enableAdvancedConfig=${enable_advanced_config}"
   --set-string "frontend.env.gpuSchedulerMode=${gpu_scheduler_mode}"

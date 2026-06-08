@@ -22,6 +22,7 @@ const (
 	defaultCreateCPU                   = "2000m"
 	defaultCreateMemory                = "4096Mi"
 	defaultCreateStorageSize           = "10Gi"
+	defaultCreateRuntimeClassName      = "devbox-runtime"
 	defaultCreateImage                 = "ghcr.io/labring-actions/devbox-runtime-expt/python-3.12:v2.5.0-zh-cn"
 	defaultGatewayPathPrefix           = "/codex"
 	defaultGatewayPort                 = 1317
@@ -61,10 +62,11 @@ type GatewayTargetConfig struct {
 }
 
 type CreateDevboxResourceConfig struct {
-	CPU          string
-	Memory       string
-	StorageLimit string
-	Image        string
+	CPU              string
+	Memory           string
+	StorageLimit     string
+	RuntimeClassName string
+	Image            string
 }
 
 type fileConfig struct {
@@ -111,9 +113,10 @@ type devboxSection struct {
 }
 
 type createDefaultsSection struct {
-	Resource     createResourceSection `yaml:"resource"`
-	StorageLimit string                `yaml:"storageLimit"`
-	Image        string                `yaml:"image"`
+	Resource         createResourceSection `yaml:"resource"`
+	StorageLimit     string                `yaml:"storageLimit"`
+	RuntimeClassName string                `yaml:"runtimeClassName"`
+	Image            string                `yaml:"image"`
 }
 
 type createResourceSection struct {
@@ -182,6 +185,11 @@ func loadServerConfig(configPath string) (ServerConfig, error) {
 	}
 	if _, err := resource.ParseQuantity(storageLimit); err != nil {
 		return ServerConfig{}, fmt.Errorf("invalid devbox.createDefaults.storageLimit %q: %w", storageLimit, err)
+	}
+
+	runtimeClassName := strings.TrimSpace(fc.Devbox.CreateDefaults.RuntimeClassName)
+	if runtimeClassName == "" {
+		runtimeClassName = defaultCreateRuntimeClassName
 	}
 
 	image := strings.TrimSpace(fc.Devbox.CreateDefaults.Image)
@@ -262,10 +270,11 @@ func loadServerConfig(configPath string) (ServerConfig, error) {
 			},
 		},
 		CreateResource: CreateDevboxResourceConfig{
-			CPU:          cpu,
-			Memory:       memory,
-			StorageLimit: storageLimit,
-			Image:        image,
+			CPU:              cpu,
+			Memory:           memory,
+			StorageLimit:     storageLimit,
+			RuntimeClassName: runtimeClassName,
+			Image:            image,
 		},
 	}
 	if cfg.Addr == "" {

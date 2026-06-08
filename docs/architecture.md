@@ -41,6 +41,10 @@ GPU frontend logic supports two scheduler modes:
 
 GPU prices and inventory come from the `node-system/node-gpu-info` ConfigMap plus account resource price data. The frontend keeps alias metadata such as display names, icons, resource keys, product names, and node names so create/edit/detail screens can round-trip existing DevBoxes.
 
+## RuntimeClass Routing
+
+v2 DevBox CRs carry `spec.runtimeClassName`, and the controller copies that value into the reconciled Pod spec. The default frontend-created RuntimeClass comes from `DEVBOX_RUNTIME_CLASS_NAME`, while server-created DevBoxes use `devbox.createDefaults.runtimeClassName` from the server YAML config. Empty values fall back to `devbox-runtime`.
+
 ## ConfigMap Mounts
 
 ConfigMap files are represented as form entries and rendered into ConfigMap volumes and volumeMounts. Editing ConfigMap content or mount paths requires a DevBox restart from the frontend flow so mounted files take effect in the workspace.

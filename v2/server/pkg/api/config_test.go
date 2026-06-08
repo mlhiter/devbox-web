@@ -34,6 +34,7 @@ devbox:
   createDefaults:
     image: "registry.example.com/devbox/runtime:latest"
     storageLimit: "20Gi"
+    runtimeClassName: "devbox-stargz-runtime"
     resource:
       cpu: "2500m"
       memory: "6144Mi"
@@ -91,6 +92,9 @@ devbox:
 	}
 	if cfg.CreateResource.StorageLimit != "20Gi" {
 		t.Fatalf("unexpected storageLimit: %s", cfg.CreateResource.StorageLimit)
+	}
+	if cfg.CreateResource.RuntimeClassName != "devbox-stargz-runtime" {
+		t.Fatalf("unexpected runtimeClassName: %s", cfg.CreateResource.RuntimeClassName)
 	}
 	if cfg.CreateResource.Image != "registry.example.com/devbox/runtime:latest" {
 		t.Fatalf("unexpected image: %s", cfg.CreateResource.Image)
@@ -158,6 +162,9 @@ devbox:
 	}
 	if cfg.CreateResource.Image != defaultCreateImage {
 		t.Fatalf("unexpected default image: %s", cfg.CreateResource.Image)
+	}
+	if cfg.CreateResource.RuntimeClassName != defaultCreateRuntimeClassName {
+		t.Fatalf("unexpected default runtimeClassName: %s", cfg.CreateResource.RuntimeClassName)
 	}
 	if cfg.LifecycleResyncInterval != 10*time.Minute {
 		t.Fatalf("unexpected lifecycleResyncInterval: %s", cfg.LifecycleResyncInterval)

@@ -101,6 +101,7 @@ func Run(configPath string) error {
 		"create_cpu", cfg.CreateResource.CPU,
 		"create_memory", cfg.CreateResource.Memory,
 		"create_storage_limit", cfg.CreateResource.StorageLimit,
+		"create_runtime_class_name", cfg.CreateResource.RuntimeClassName,
 		"create_image", cfg.CreateResource.Image,
 	)
 

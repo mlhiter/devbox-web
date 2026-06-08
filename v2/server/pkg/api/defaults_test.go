@@ -10,10 +10,11 @@ import (
 
 func TestDefaultCreateDevboxSpec(t *testing.T) {
 	spec := defaultCreateDevboxSpec(CreateDevboxResourceConfig{
-		CPU:          "2000m",
-		Memory:       "4096Mi",
-		StorageLimit: "20Gi",
-		Image:        "registry.example.com/devbox/runtime:stable",
+		CPU:              "2000m",
+		Memory:           "4096Mi",
+		StorageLimit:     "20Gi",
+		RuntimeClassName: "devbox-stargz-runtime",
+		Image:            "registry.example.com/devbox/runtime:stable",
 	})
 
 	if spec.State != devboxv1alpha2.DevboxStateRunning {
@@ -33,7 +34,7 @@ func TestDefaultCreateDevboxSpec(t *testing.T) {
 	if spec.TemplateID != "aa117587-7c09-4fab-bee4-97b833d55981" {
 		t.Fatalf("unexpected templateID: %s", spec.TemplateID)
 	}
-	if spec.RuntimeClassName != "devbox-runtime" {
+	if spec.RuntimeClassName != "devbox-stargz-runtime" {
 		t.Fatalf("unexpected runtimeClassName: %s", spec.RuntimeClassName)
 	}
 	if spec.Image != "registry.example.com/devbox/runtime:stable" {
@@ -47,5 +48,18 @@ func TestDefaultCreateDevboxSpec(t *testing.T) {
 	}
 	if len(spec.Config.ReleaseArgs) != 1 || spec.Config.ReleaseArgs[0] != "/home/devbox/workspace/entrypoint.sh prod" {
 		t.Fatalf("unexpected releaseArgs: %+v", spec.Config.ReleaseArgs)
+	}
+}
+
+func TestDefaultCreateDevboxSpecDefaultsRuntimeClassName(t *testing.T) {
+	spec := defaultCreateDevboxSpec(CreateDevboxResourceConfig{
+		CPU:          "2000m",
+		Memory:       "4096Mi",
+		StorageLimit: "20Gi",
+		Image:        "registry.example.com/devbox/runtime:stable",
+	})
+
+	if spec.RuntimeClassName != defaultCreateRuntimeClassName {
+		t.Fatalf("unexpected default runtimeClassName: %s", spec.RuntimeClassName)
 	}
 }

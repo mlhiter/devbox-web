@@ -123,6 +123,7 @@ controller 二进制默认使用下面这些参数：
 - `gateway.domain`
 - `gateway.pathPrefix`
 - `devbox.createDefaults.image`
+- `devbox.createDefaults.runtimeClassName`
 - `devbox-server` 镜像地址
 
 ## v2 里 snapshotter 的路由方式
@@ -152,15 +153,19 @@ spec:
   runtimeClassName: devbox-runtime
 ```
 
-这意味着：
+这意味着 API server 默认走 `devbox snapshotter`。如果要切到 `stargz`，可以在 server 配置里设置：
 
-- 当前 API server 默认走的是 `devbox snapshotter`
-- `stargz` 虽然 controller 已经支持，但并没有通过当前 create API 暴露出来
+```yaml
+devbox:
+  createDefaults:
+    runtimeClassName: devbox-stargz-runtime
+```
 
 ### 这件事在落地上的含义
 
 - 如果只部署 `v2/controller`，你可以通过直接创建 `Devbox` CR 的方式使用 `devbox` 或 `stargz`
-- 如果同时部署 `v2/server` 且不改代码，那么所有通过 API 创建的 DevBox 目前都会走 `devbox-runtime`
+- 如果同时部署 `v2/server`，通过 `devbox.createDefaults.runtimeClassName` 控制 API 创建 DevBox 的默认 RuntimeClass
+- 如果通过 `v2/frontend` 创建 DevBox，通过 `DEVBOX_RUNTIME_CLASS_NAME` 控制默认 RuntimeClass
 
 ## controller 部署
 
@@ -394,12 +399,12 @@ spec:
   runtimeClassName: devbox-stargz-runtime
 ```
 
-这条路径 controller 已经支持，但当前 `v2/server` 的 create API 还没有把它暴露出来。
+这条路径 controller 已经支持；`v2/server` 和 `v2/frontend` 都可以通过部署配置切换默认 RuntimeClass。
 
 如果你现在就要用 `stargz`，现实可行的方式有两个：
 
 1. 不走 `v2/server`，直接创建 `Devbox` CR
-2. 扩展 `v2/server`，让 create 请求可以传 `runtimeClassName`
+2. 将 `v2/server` 的 `devbox.createDefaults.runtimeClassName` 或 `v2/frontend` 的 `DEVBOX_RUNTIME_CLASS_NAME` 设置为 `devbox-stargz-runtime`
 
 ## 当前部署上的缺口
 
@@ -407,7 +412,7 @@ spec:
 
 1. `v2/deploy` 下还没有统一的总 manifest，controller、server 和 frontend 还是分开部署的。
 2. 仓库里没有 `devbox snapshotter`、`stargz snapshotter` 以及 runtime handler 的节点侧安装清单。
-3. `v2/server` 当前默认固定写 `devbox-runtime`，create API 还不能切换到 `devbox-stargz-runtime`。
+3. RuntimeClass 选择现在已经可配置，但运行时节点仍必须提前安装匹配的 runtime handler 和 snapshotter。
 4. `v2/server/deploy/devbox-api.yaml` 仍然更像一份环境示例，不适合完全不改直接上生产。
 
 ## 实际落地建议

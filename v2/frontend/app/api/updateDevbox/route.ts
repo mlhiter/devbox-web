@@ -7,6 +7,7 @@ import { jsonRes } from '@/services/backend/response';
 import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
 import type { DevboxPatchPropsType } from '@/types/devbox';
+import { preserveExistingRuntimeClassName } from '@/utils/runtimeClassName';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,16 +38,21 @@ export async function POST(req: NextRequest) {
       }
     > = {
       [YamlKindEnum.Devbox]: {
-        patch: (jsonPatch: Object) => {
+        patch: async (jsonPatch: Record<string, any>) => {
           // @ts-ignore
           const name = jsonPatch?.metadata?.name;
+          const safePatch = await preserveExistingRuntimeClassName({
+            jsonPatch,
+            k8sCustomObjects,
+            namespace
+          });
           return k8sCustomObjects.patchNamespacedCustomObject(
             'devbox.sealos.io',
             'v1alpha2',
             namespace,
             'devboxes',
             name,
-            jsonPatch,
+            safePatch,
             undefined,
             undefined,
             undefined,

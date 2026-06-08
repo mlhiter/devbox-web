@@ -103,6 +103,8 @@ spec:
         {{- end }}
         - name: DEVBOX_AFFINITY_ENABLE
           value: {{ .Values.frontend.env.devboxAffinityEnable | quote }}
+        - name: DEVBOX_RUNTIME_CLASS_NAME
+          value: {{ .Values.frontend.env.runtimeClassName | quote }}
         - name: METRICS_URL
           value: {{ .Values.frontend.env.metricsUrl | quote }}
         - name: MONITOR_URL

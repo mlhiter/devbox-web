@@ -30,6 +30,7 @@ frontend:
     cpuSlideMarkList: "2,4,8,16,32"
     memorySlideMarkList: "4,8,16,32,64"
     storageLimit: 20Gi
+    runtimeClassName: devbox-runtime
     storageDefault: "20"
     nfsStorageClassName: nfs-csi
     nfsMaxSize: "1000"

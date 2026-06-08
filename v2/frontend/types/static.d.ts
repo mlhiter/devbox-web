@@ -29,6 +29,7 @@ export interface Env {
   ingressSecret: string;
   registryAddr: string;
   devboxAffinityEnable: string;
+  runtimeClassName: string;
   gpuSchedulerMode: 'hami' | 'native';
   namespace: string;
   rootRuntimeNamespace: string;
