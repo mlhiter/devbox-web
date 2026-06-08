@@ -39,6 +39,13 @@ var (
 		},
 		rwStorageMetricLabels,
 	)
+	rwStorageCollectActive = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "devbox_rw_storage_collect_active",
+			Help: "Whether Devbox read-write layer storage is actively collected by this exporter. 1 means live collection, 0 means the last successful sample is retained.",
+		},
+		rwStorageMetricLabels,
+	)
 	rwStorageCollectErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "devbox_rw_storage_collect_errors_total",
@@ -65,8 +72,9 @@ func (k RWStorageMetricKey) labelValues() []string {
 
 type RWStorageMetricsRecorder interface {
 	RecordSample(target RWStorageTarget, usedBytes, limitBytes int64, collectedAt time.Time)
+	RecordTargetActive(target RWStorageTarget, active bool)
 	RecordCollectError(node, reason string)
-	DeleteStale(activeKeys map[RWStorageMetricKey]struct{})
+	DeleteUnretained(retainKeys map[RWStorageMetricKey]struct{})
 }
 
 type PrometheusRWStorageMetricsRecorder struct {
@@ -81,6 +89,7 @@ func NewPrometheusRWStorageMetricsRecorder() *PrometheusRWStorageMetricsRecorder
 			rwStorageLimitBytes,
 			rwStorageUsageRatio,
 			rwStorageLastCollectTimestamp,
+			rwStorageCollectActive,
 			rwStorageCollectErrors,
 		)
 	})
@@ -107,6 +116,21 @@ func (r *PrometheusRWStorageMetricsRecorder) RecordSample(
 	}
 	rwStorageLastCollectTimestamp.WithLabelValues(labelValues...).Set(float64(collectedAt.Unix()))
 
+	r.RecordTargetActive(target, true)
+}
+
+func (r *PrometheusRWStorageMetricsRecorder) RecordTargetActive(
+	target RWStorageTarget,
+	active bool,
+) {
+	key := target.MetricKey()
+	labelValues := key.labelValues()
+	value := 0.0
+	if active {
+		value = 1
+	}
+	rwStorageCollectActive.WithLabelValues(labelValues...).Set(value)
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.knownSet[key] = struct{}{}
@@ -116,14 +140,14 @@ func (r *PrometheusRWStorageMetricsRecorder) RecordCollectError(node, reason str
 	rwStorageCollectErrors.WithLabelValues(node, reason).Inc()
 }
 
-func (r *PrometheusRWStorageMetricsRecorder) DeleteStale(
-	activeKeys map[RWStorageMetricKey]struct{},
+func (r *PrometheusRWStorageMetricsRecorder) DeleteUnretained(
+	retainKeys map[RWStorageMetricKey]struct{},
 ) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for key := range r.knownSet {
-		if _, ok := activeKeys[key]; ok {
+		if _, ok := retainKeys[key]; ok {
 			continue
 		}
 		labelValues := key.labelValues()
@@ -131,6 +155,7 @@ func (r *PrometheusRWStorageMetricsRecorder) DeleteStale(
 		rwStorageLimitBytes.DeleteLabelValues(labelValues...)
 		rwStorageUsageRatio.DeleteLabelValues(labelValues...)
 		rwStorageLastCollectTimestamp.DeleteLabelValues(labelValues...)
+		rwStorageCollectActive.DeleteLabelValues(labelValues...)
 		delete(r.knownSet, key)
 	}
 }

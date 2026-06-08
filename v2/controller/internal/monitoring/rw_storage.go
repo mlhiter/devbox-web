@@ -144,17 +144,18 @@ func (c *RWStorageCollector) collectOnce(ctx context.Context) {
 	collectCtx, cancel := context.WithTimeout(ctx, c.CollectTimeout)
 	defer cancel()
 
-	targets, err := BuildRWStorageTargets(collectCtx, c.Client, c.NodeName)
+	targetSets, err := BuildRWStorageTargetSets(collectCtx, c.Client, c.NodeName)
 	if err != nil {
 		c.Recorder.RecordCollectError(c.NodeName, "list_devboxes")
 		c.Logger.Error(err, "failed to build rw storage targets", "node", c.NodeName)
 		return
 	}
 
-	activeKeys := make(map[RWStorageMetricKey]struct{}, len(targets))
-	for _, target := range targets {
+	activeKeys := make(map[RWStorageMetricKey]struct{}, len(targetSets.Collect))
+	for _, target := range targetSets.Collect {
 		key := target.MetricKey()
 		activeKeys[key] = struct{}{}
+		c.Recorder.RecordTargetActive(target, true)
 
 		sample, err := c.collectTarget(collectCtx, target)
 		if err != nil {
@@ -181,7 +182,16 @@ func (c *RWStorageCollector) collectOnce(ctx context.Context) {
 
 		c.Recorder.RecordSample(sample.Target, sample.UsedBytes, sample.LimitBytes, time.Now())
 	}
-	c.Recorder.DeleteStale(activeKeys)
+
+	retainKeys := make(map[RWStorageMetricKey]struct{}, len(targetSets.Retain))
+	for _, target := range targetSets.Retain {
+		key := target.MetricKey()
+		retainKeys[key] = struct{}{}
+		if _, ok := activeKeys[key]; !ok {
+			c.Recorder.RecordTargetActive(target, false)
+		}
+	}
+	c.Recorder.DeleteUnretained(retainKeys)
 }
 
 func (c *RWStorageCollector) collectTarget(
@@ -294,6 +304,10 @@ func devboxIsRWStorageObservable(devbox *devboxv1alpha2.Devbox) bool {
 	}
 }
 
+func devboxIsRWStorageRetainable(devbox *devboxv1alpha2.Devbox) bool {
+	return devbox != nil && devbox.DeletionTimestamp.IsZero()
+}
+
 func commitRecordSnapshotter(record *devboxv1alpha2.CommitRecord) string {
 	if record == nil || strings.TrimSpace(record.Snapshotter) == "" {
 		return commit.DefaultDevboxSnapshotter
@@ -337,33 +351,54 @@ func (t RWStorageTarget) MetricKey() RWStorageMetricKey {
 	}
 }
 
-// BuildRWStorageTargets selects Devboxes whose current content is owned by the
-// local node. It avoids Pod lookups so stopped Pods or cache lag do not prevent
-// cleanup of stale metric series.
+// RWStorageTargetSets separates targets that should be queried from targets
+// whose last successful samples should remain exported.
+type RWStorageTargetSets struct {
+	Collect []RWStorageTarget
+	Retain  []RWStorageTarget
+}
+
+// BuildRWStorageTargets selects actively observable Devboxes whose current
+// content is owned by the local node.
 func BuildRWStorageTargets(
 	ctx context.Context,
 	reader client.Reader,
 	nodeName string,
 ) ([]RWStorageTarget, error) {
+	targetSets, err := BuildRWStorageTargetSets(ctx, reader, nodeName)
+	if err != nil {
+		return nil, err
+	}
+	return targetSets.Collect, nil
+}
+
+// BuildRWStorageTargetSets selects Devboxes whose current content is owned by
+// the local node. It avoids Pod lookups so stopped Pods or cache lag do not
+// prevent retaining or cleaning metric series.
+func BuildRWStorageTargetSets(
+	ctx context.Context,
+	reader client.Reader,
+	nodeName string,
+) (RWStorageTargetSets, error) {
 	if reader == nil {
-		return nil, errors.New("client reader is nil")
+		return RWStorageTargetSets{}, errors.New("client reader is nil")
 	}
 	nodeName = strings.TrimSpace(nodeName)
 	if nodeName == "" {
-		return nil, errors.New("nodeName is empty")
+		return RWStorageTargetSets{}, errors.New("nodeName is empty")
 	}
 
 	devboxList := &devboxv1alpha2.DevboxList{}
 	if err := reader.List(ctx, devboxList); err != nil {
-		return nil, err
+		return RWStorageTargetSets{}, err
 	}
 
-	targets := make([]RWStorageTarget, 0, len(devboxList.Items))
+	targetSets := RWStorageTargetSets{
+		Collect: make([]RWStorageTarget, 0, len(devboxList.Items)),
+		Retain:  make([]RWStorageTarget, 0, len(devboxList.Items)),
+	}
 	for i := range devboxList.Items {
 		devbox := &devboxList.Items[i]
-		if !devboxIsRWStorageObservable(devbox) {
-			continue
-		}
 		record := devboxCurrentRecord(devbox)
 		if record == nil || strings.TrimSpace(record.Node) != nodeName {
 			continue
@@ -373,17 +408,23 @@ func BuildRWStorageTargets(
 			continue
 		}
 
-		targets = append(targets, RWStorageTarget{
+		target := RWStorageTarget{
 			Namespace:    devbox.Namespace,
 			Devbox:       devbox.Name,
 			ContentID:    contentID,
 			Node:         nodeName,
 			Snapshotter:  commitRecordSnapshotter(record),
 			StorageLimit: devboxStorageLimit(devbox),
-		})
+		}
+		if devboxIsRWStorageRetainable(devbox) {
+			targetSets.Retain = append(targetSets.Retain, target)
+		}
+		if devboxIsRWStorageObservable(devbox) {
+			targetSets.Collect = append(targetSets.Collect, target)
+		}
 	}
 
-	return targets, nil
+	return targetSets, nil
 }
 
 func withContainerdNamespace(ctx context.Context) context.Context {

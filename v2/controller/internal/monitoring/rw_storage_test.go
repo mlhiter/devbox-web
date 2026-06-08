@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/containerd/containerd/v2/core/snapshots"
 	"github.com/sealos-apps/devbox/v2/controller/api/v1alpha2"
@@ -95,6 +96,88 @@ func TestBuildRWStorageTargetsIncludesRunningSpecBeforeStatusSync(t *testing.T) 
 	}
 }
 
+func TestBuildRWStorageTargetSetsRetainsStoppedWithoutCollecting(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha2.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() error = %v", err)
+	}
+
+	reader := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(
+			newDevboxTarget("running", "node-a", v1alpha2.DevboxStateRunning),
+			newDevboxTarget("stopped", "node-a", v1alpha2.DevboxStateStopped),
+			newDevboxTarget("other-node", "node-b", v1alpha2.DevboxStateStopped),
+		).
+		Build()
+
+	targetSets, err := BuildRWStorageTargetSets(context.Background(), reader, "node-a")
+	if err != nil {
+		t.Fatalf("BuildRWStorageTargetSets() error = %v", err)
+	}
+	if len(targetSets.Collect) != 1 {
+		t.Fatalf("Collect got %d targets, want 1: %#v", len(targetSets.Collect), targetSets.Collect)
+	}
+	if targetSets.Collect[0].Devbox != "running" {
+		t.Fatalf("Collect[0].Devbox = %q, want running", targetSets.Collect[0].Devbox)
+	}
+	if len(targetSets.Retain) != 2 {
+		t.Fatalf("Retain got %d targets, want 2: %#v", len(targetSets.Retain), targetSets.Retain)
+	}
+
+	gotStopped := false
+	for _, target := range targetSets.Retain {
+		if target.Devbox == "stopped" {
+			gotStopped = true
+		}
+	}
+	if !gotStopped {
+		t.Fatalf("Retain did not include stopped target: %#v", targetSets.Retain)
+	}
+}
+
+func TestCollectOnceRetainsStoppedSampleWithoutSnapshotUsage(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha2.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() error = %v", err)
+	}
+
+	stopped := newDevboxTarget("stopped", "node-a", v1alpha2.DevboxStateStopped)
+	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stopped).Build()
+	recorder := newFakeRWStorageMetricsRecorder()
+	factoryCalls := 0
+	collector := RWStorageCollector{
+		Client:   reader,
+		NodeName: "node-a",
+		SnapshotServiceFactory: func(string) SnapshotService {
+			factoryCalls++
+			return fakeSnapshotService{}
+		},
+		Recorder:       recorder,
+		CollectTimeout: time.Second,
+	}
+
+	collector.collectOnce(context.Background())
+
+	if factoryCalls != 0 {
+		t.Fatalf("SnapshotServiceFactory called %d times, want 0", factoryCalls)
+	}
+	if len(recorder.samples) != 0 {
+		t.Fatalf("RecordSample called for stopped target: %#v", recorder.samples)
+	}
+	key := stoppedTargetKey("stopped")
+	active, ok := recorder.active[key]
+	if !ok {
+		t.Fatalf("RecordTargetActive not called for stopped target")
+	}
+	if active {
+		t.Fatalf("RecordTargetActive = true, want false for stopped target")
+	}
+	if _, ok := recorder.retained[key]; !ok {
+		t.Fatalf("DeleteUnretained retain keys did not include stopped target")
+	}
+}
+
 func TestFindSnapshotByContentID(t *testing.T) {
 	service := fakeSnapshotService{
 		infos: []snapshots.Info{
@@ -164,6 +247,43 @@ func (f fakeSnapshotService) Usage(context.Context, string) (snapshots.Usage, er
 	return snapshots.Usage{Size: 42}, nil
 }
 
+type fakeRWStorageMetricsRecorder struct {
+	samples  []RWStorageTarget
+	active   map[RWStorageMetricKey]bool
+	retained map[RWStorageMetricKey]struct{}
+}
+
+func newFakeRWStorageMetricsRecorder() *fakeRWStorageMetricsRecorder {
+	return &fakeRWStorageMetricsRecorder{
+		active:   make(map[RWStorageMetricKey]bool),
+		retained: make(map[RWStorageMetricKey]struct{}),
+	}
+}
+
+func (f *fakeRWStorageMetricsRecorder) RecordSample(
+	target RWStorageTarget,
+	_ int64,
+	_ int64,
+	_ time.Time,
+) {
+	f.samples = append(f.samples, target)
+}
+
+func (f *fakeRWStorageMetricsRecorder) RecordTargetActive(
+	target RWStorageTarget,
+	active bool,
+) {
+	f.active[target.MetricKey()] = active
+}
+
+func (f *fakeRWStorageMetricsRecorder) RecordCollectError(string, string) {}
+
+func (f *fakeRWStorageMetricsRecorder) DeleteUnretained(
+	retainKeys map[RWStorageMetricKey]struct{},
+) {
+	f.retained = retainKeys
+}
+
 func newDevboxTarget(
 	name string,
 	node string,
@@ -206,5 +326,15 @@ func newDevboxWithoutRecord(name string) *v1alpha2.Devbox {
 			State:     v1alpha2.DevboxStateRunning,
 			ContentID: "missing-record",
 		},
+	}
+}
+
+func stoppedTargetKey(name string) RWStorageMetricKey {
+	return RWStorageMetricKey{
+		Namespace:   "default",
+		Devbox:      name,
+		ContentID:   "content-" + name,
+		Node:        "node-a",
+		Snapshotter: "devbox",
 	}
 }

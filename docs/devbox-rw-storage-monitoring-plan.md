@@ -13,7 +13,8 @@
 - 暴露 Prometheus 格式 metrics，供 VictoriaMetrics 采集。
 - 通过 `VMServiceScrape` 接入线上 vmagent。
 - 支持按 namespace、devbox、contentID、node、snapshotter 查询。
-- 输出已用字节数、存储限制、使用率、最近采集时间和采集错误。
+- 输出已用字节数、存储限制、使用率、最近采集时间、实时采集状态和采集错误。
+- Devbox stopped 后不继续查询本地 LV/snapshot，但保留最后一次成功采集值供展示。
 - 本阶段只做后端/controller 与部署清单改造，不修改前端代码。
 
 ## 非目标
@@ -145,6 +146,22 @@ snapshotService.Usage(ctx, snapshotName)
 
 如果底层 snapshotter 使用 LV 或 thin device，具体映射由 snapshotter 内部负责，采集器不直接解析 LV 名称。
 
+### stopped 状态处理
+
+Devbox 进入稳定 stopped 状态后，采集器不再把它放入实时采集目标，因此不会继续调用 containerd snapshotter `Walk()` 或 `Usage()` 查询本机 LV/RW 层。
+
+为了支持前端展示“停止前最后一次用量”，采集器会把本节点仍拥有 current content record 的 stopped Devbox 放入保留目标：
+
+- `devbox_rw_storage_used_bytes`、`devbox_rw_storage_limit_bytes`、`devbox_rw_storage_usage_ratio` 保留最后一次成功采集值。
+- `devbox_rw_storage_last_collect_timestamp_seconds` 保留最后一次成功采集时间。
+- `devbox_rw_storage_collect_active` 设置为 `0`，表示该 Devbox 当前不是实时采集对象，展示值是最后一次成功采集值。
+
+如果 Devbox 从未成功采集过就处于 stopped 状态，可能只有 `devbox_rw_storage_collect_active = 0`，而没有 used/limit/ratio/timestamp 样本。查询端需要把这种情况当作“暂无历史采集值”处理。
+
+当 Devbox 删除、current content record 缺失，或 current content record 所在节点不再是当前 commit-worker 节点时，该 Devbox 的 exporter 进程内指标会被清理。VictoriaMetrics 中已经抓取到的历史样本仍按 VM retention 保留。
+
+如果出现启动过程中的状态同步窗口，例如 `spec.state=Running` 但 `status.state=Stopped`，采集器仍把它作为实时采集对象处理，避免启动过程中缺少监控数据。
+
 ## 指标设计
 
 新增指标如下：
@@ -154,6 +171,7 @@ devbox_rw_storage_used_bytes
 devbox_rw_storage_limit_bytes
 devbox_rw_storage_usage_ratio
 devbox_rw_storage_last_collect_timestamp_seconds
+devbox_rw_storage_collect_active
 devbox_rw_storage_collect_errors_total
 ```
 
@@ -162,7 +180,7 @@ devbox_rw_storage_collect_errors_total
 `devbox_rw_storage_used_bytes`
 
 - 类型：Gauge
-- 含义：当前 Devbox RW 层已使用字节数
+- 含义：Devbox RW 层已使用字节数；当 `collect_active=0` 时表示最后一次成功采集值
 - labels：`namespace`、`devbox`、`content_id`、`node`、`snapshotter`
 
 `devbox_rw_storage_limit_bytes`
@@ -174,7 +192,7 @@ devbox_rw_storage_collect_errors_total
 `devbox_rw_storage_usage_ratio`
 
 - 类型：Gauge
-- 含义：RW 层存储使用率
+- 含义：RW 层存储使用率；当 `collect_active=0` 时表示最后一次成功采集值
 - 计算：`used_bytes / limit_bytes`
 - labels：`namespace`、`devbox`、`content_id`、`node`、`snapshotter`
 
@@ -183,6 +201,13 @@ devbox_rw_storage_collect_errors_total
 - 类型：Gauge
 - 含义：最近一次成功采集时间
 - 单位：Unix timestamp seconds
+- labels：`namespace`、`devbox`、`content_id`、`node`、`snapshotter`
+
+`devbox_rw_storage_collect_active`
+
+- 类型：Gauge
+- 含义：当前是否为实时采集对象
+- 取值：`1` 表示当前会实时查询本机 snapshot/LV 用量；`0` 表示当前停止实时查询，仅保留最后一次成功采集值
 - labels：`namespace`、`devbox`、`content_id`、`node`、`snapshotter`
 
 `devbox_rw_storage_collect_errors_total`
@@ -215,6 +240,7 @@ VictoriaMetrics
 | Devbox commit record | 是 | Kubernetes Devbox CR status |
 | RW 层实际数据 | 是 | 节点本机 containerd snapshotter / 底层存储 |
 | 当前采集值 | 否 | commit-worker 进程内 metrics |
+| stopped 后最后一次采集值 | 否 | commit-worker 进程内 metrics，进程重启后需依赖 VictoriaMetrics 历史样本 |
 | 历史监控曲线 | 是 | VictoriaMetrics |
 | 采集错误历史 | 是 | VictoriaMetrics |
 
@@ -321,6 +347,26 @@ avg(devbox_rw_storage_usage_ratio{namespace="<namespace>",devbox="<devboxName>"}
 rwStoragePercent = ratio * 100
 ```
 
+判断查询结果是否为实时采集：
+
+```promql
+avg(devbox_rw_storage_collect_active{namespace="<namespace>",devbox="<devboxName>"})
+```
+
+返回值语义：
+
+```text
+1: 当前 Devbox 处于实时采集状态
+0: 当前 Devbox 未实时采集，used/limit/ratio 是最后一次成功采集值
+空: 当前 exporter 没有该 Devbox 的可保留指标，或从未采集过
+```
+
+查询最后一次成功采集时间：
+
+```promql
+avg(devbox_rw_storage_last_collect_timestamp_seconds{namespace="<namespace>",devbox="<devboxName>"})
+```
+
 查询某个 Devbox 已使用字节数：
 
 ```promql
@@ -356,8 +402,17 @@ sum by (node, reason) (
 | `rwStorage` | `devbox_rw_storage_usage_ratio * 100` | RW 层使用百分比 |
 | `rwStorageUsedBytes` | `devbox_rw_storage_used_bytes` | RW 层已使用字节数 |
 | `rwStorageLimitBytes` | `devbox_rw_storage_limit_bytes` | RW 层存储限制字节数 |
+| `rwStorageCollectActive` | `devbox_rw_storage_collect_active` | `1` 表示实时采集，`0` 表示最后一次成功采集值 |
+| `rwStorageLastCollectAt` | `devbox_rw_storage_last_collect_timestamp_seconds` | 最近一次成功采集时间，Unix timestamp seconds |
 
 如果 `rwStorageLimitBytes` 缺失或为 `0`，前端可以回退使用 Devbox spec 中的 storage limit 做展示。
+
+展示建议：
+
+- `rwStorageCollectActive = 1`：展示为当前用量。
+- `rwStorageCollectActive = 0` 且 used/ratio 存在：展示为停止前最后一次用量，并展示 `rwStorageLastCollectAt`。
+- `rwStorageCollectActive = 0` 但 used/ratio 不存在：展示为暂无历史采集值。
+- 指标为空：展示为暂无监控数据，通常表示 exporter 尚未采集、Devbox 已删除、content record 不在当前节点，或 vmagent 尚未抓取。
 
 ## 验证计划
 
