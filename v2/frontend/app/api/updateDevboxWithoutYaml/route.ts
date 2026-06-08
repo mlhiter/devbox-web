@@ -33,12 +33,14 @@ export async function POST(req: NextRequest) {
     const newYamlList = generateYamlList(newEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
       runtimeClassName: process.env.DEVBOX_RUNTIME_CLASS_NAME,
-      ingressSecret: process.env.INGRESS_SECRET!
+      ingressSecret: process.env.INGRESS_SECRET!,
+      gpuSchedulerMode: process.env.GPU_SCHEDULER_MODE
     });
     const oldYamlList = generateYamlList(oldEditableFormData, {
       devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE!,
       runtimeClassName: process.env.DEVBOX_RUNTIME_CLASS_NAME,
-      ingressSecret: process.env.INGRESS_SECRET!
+      ingressSecret: process.env.INGRESS_SECRET!,
+      gpuSchedulerMode: process.env.GPU_SCHEDULER_MODE
     });
 
     const parsedNewYamlList = newYamlList.map((item) => item.value);

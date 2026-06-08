@@ -39,8 +39,14 @@ const GpuSchema = z
     type: z.string().default('').openapi({
       description: 'GPU type'
     }),
+    product: z.string().optional().openapi({
+      description: 'GPU product label value for native scheduling'
+    }),
     amount: z.number().default(1).openapi({
       description: 'GPU amount'
+    }),
+    resource: z.record(z.string()).optional().openapi({
+      description: 'GPU resource keys used by the scheduler'
     })
   })
   .optional();

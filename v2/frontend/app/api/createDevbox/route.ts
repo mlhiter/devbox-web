@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
       DEVBOX_AFFINITY_ENABLE,
       STORAGE_LIMIT,
       DEVBOX_RUNTIME_CLASS_NAME,
-      NFS_STORAGE_CLASS_NAME
+      NFS_STORAGE_CLASS_NAME,
+      GPU_SCHEDULER_MODE
     } = process.env;
     const templateDefaults = getTemplateDefaults(template.config);
     const finalDevboxForm = {
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       finalDevboxForm,
       DEVBOX_AFFINITY_ENABLE,
       STORAGE_LIMIT,
-      undefined,
+      GPU_SCHEDULER_MODE,
       DEVBOX_RUNTIME_CLASS_NAME
     );
     const service = json2Service(finalDevboxForm);
