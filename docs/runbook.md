@@ -43,14 +43,18 @@ Common v2 frontend settings include:
 - `ACCOUNT_URL`
 - `METRICS_URL`; the metrics SDK expects a Prometheus-compatible query endpoint, for example the VictoriaMetrics select service at `http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus`
 - `DATABASE_URL`
+- `DATABASE_PROVIDER`
 - `REGISTRY_ADDR`, `REGISTRY_USER`, `REGISTRY_PASSWORD`
 - `GPU_ENABLE`
 - `GPU_SCHEDULER_MODE`, with `native` and `hami` supported
 - `DEVBOX_RUNTIME_CLASS_NAME`, the RuntimeClass written by v2 frontend create flows; default `devbox-runtime`, with `devbox-stargz-runtime` available when the cluster has the matching runtime handler and snapshotter
 - `ENABLED_IDES`
 - `ENABLE_ADVANCED_CONFIG`; set it to `true` to show advanced env and ConfigMap editing in the frontend
+- `ENABLE_ADVANCED_ENV_AND_CONFIGMAP`, `ENABLE_ADVANCED_NFS`, and `ENABLE_ADVANCED_SHARED_MEMORY` are kept in the chart and template for deployment compatibility; current v2 UI gating reads `ENABLE_ADVANCED_CONFIG`
 - `STORAGE_LIMIT`
 - `APP_LAUNCHPAD_URL`
+- `GUIDE_ENABLED`
+- `FORCED_LANGUAGE`
 - `DEVBOX_DOMAIN_CHALLENGE_SECRET`
 
 Registry retagging requires HTTPS registry access from the frontend route handlers.

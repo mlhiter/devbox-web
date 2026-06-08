@@ -23,11 +23,18 @@ REGION_UID='<region uid>'
 DATABASE_URL='<template database url>'
 METRICS_URL='http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus'
 STORAGE_LIMIT='20Gi'
+DEVBOX_RUNTIME_CLASS_NAME='devbox-runtime'
+GPU_SCHEDULER_MODE='native'
 APP_LAUNCHPAD_URL='http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha'
 ENABLE_ADVANCED_CONFIG='true'
 ```
 
 Do not commit real `.env.*.local` secrets.
+
+The template also documents deployment compatibility and optional UI switches:
+`DATABASE_PROVIDER`, `ENABLED_IDES`, `ENABLE_ADVANCED_ENV_AND_CONFIGMAP`,
+`ENABLE_ADVANCED_NFS`, `ENABLE_ADVANCED_SHARED_MEMORY`, `GUIDE_ENABLED`, and
+`FORCED_LANGUAGE`.
 
 `REGISTRY_ADDR` is used over HTTPS for backend retag requests. It may be set as
 `hub.example.com`; the frontend server adds `https://` when no scheme is

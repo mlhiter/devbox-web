@@ -14,6 +14,7 @@ Set at least:
 ```bash
 NEXT_PUBLIC_MOCK_USER='<kubeconfig JSON string>'
 SEALOS_DOMAIN='192.168.10.70.nip.io'
+SSH_DOMAIN='192.168.10.70.nip.io'
 INGRESS_DOMAIN='192.168.10.70.nip.io'
 REGISTRY_ADDR='hub.192.168.10.70.nip.io'
 JWT_SECRET='<desktop jwt secret>'
@@ -23,6 +24,12 @@ DATABASE_PROVIDER='cockroachdb'
 ```
 
 Do not commit real `.env.*.local` secrets.
+
+The template also documents optional feature and deployment switches used by
+current v1 routes: `STORAGE_LIMIT`, `GPU_SCHEDULER_MODE`,
+`APP_LAUNCHPAD_URL`, `ENABLE_ADVANCED_CONFIG`,
+`ENABLE_ADVANCED_ENV_AND_CONFIGMAP`, `ENABLE_ADVANCED_NFS`,
+`ENABLE_ADVANCED_SHARED_MEMORY`, `GUIDE_ENABLED`, and `FORCED_LANGUAGE`.
 
 `REGISTRY_ADDR` is used over HTTPS for backend retag requests. It may be set as
 `hub.example.com`; the frontend server adds `https://` when no scheme is
