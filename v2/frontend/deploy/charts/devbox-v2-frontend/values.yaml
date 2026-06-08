@@ -1,0 +1,90 @@
+cloudDomain: "127.0.0.1.nip.io"
+cloudPort: ""
+httpPort: ""
+disableHttps: false
+certSecretName: "wildcard-cert"
+
+registry:
+  addr: ""
+  user: ""
+  password: ""
+
+platform:
+  databaseUrl: ""
+  databaseProvider: "cockroachdb"
+  jwtSecret: ""
+  regionUid: ""
+  tlsRejectUnauthorized: "1"
+
+frontend:
+  enabled: true
+  namespace: devbox-frontend
+  replicas: 1
+  image:
+    repository: ghcr.io/sealos-apps/devbox-v2-frontend
+    tag: latest
+    pullPolicy: Always
+  initImage:
+    repository: ghcr.io/sealos-apps/devbox-v2-frontend
+    tag: latest
+    pullPolicy: Always
+  runtimeSecret:
+    enabled: true
+    name: devbox-frontend-runtime
+  config:
+    addr: ":3000"
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2048Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  env:
+    documentUrlZh: https://sealos.run/docs/overview/intro
+    documentUrlEn: https://sealos.io/docs/overview/intro
+    privacyUrlZh: https://sealos.run/docs/msa/privacy-policy
+    privacyUrlEn: https://sealos.io/docs/msa/privacy-policy
+    sshDomain: ""
+    ingressSecret: ""
+    devboxAffinityEnable: "true"
+    metricsUrl: http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus
+    monitorUrl: http://launchpad-monitor.sealos.svc.cluster.local:8428
+    accountUrl: http://account-service.account-system.svc.cluster.local:2333
+    appLaunchpadUrl: http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha
+    rootRuntimeNamespace: devbox-system
+    currencySymbol: shellCoin
+    gpuEnable: "false"
+    gpuSchedulerMode: native
+    squashEnable: "false"
+    retagSvcUrl: ""
+    enableImportFeature: "true"
+    enableWebideFeature: "true"
+    enabledIDEs: ""
+    enableAdvancedConfig: "true"
+    enableAdvancedEnvAndConfigmap: "true"
+    enableAdvancedNfs: "true"
+    enableAdvancedSharedMemory: "true"
+    cpuSlideMarkList: "2,4,8,16,32"
+    memorySlideMarkList: "4,8,16,32,64"
+    storageLimit: 20Gi
+    storageDefault: "20"
+    domainChallengeSecret: ""
+    nfsStorageClassName: nfs-csi
+    nfsMaxSize: "1000"
+    webidePort: "9999"
+    customScripts: ""
+
+ingress:
+  enabled: true
+  className: nginx
+  hostPrefix: devbox
+
+app:
+  enabled: true
+  namespace: app-system
+  name: devbox
+  displayType: normal
+  type: iframe
+
+extraManifests: []

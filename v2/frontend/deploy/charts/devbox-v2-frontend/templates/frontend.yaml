@@ -1,0 +1,221 @@
+{{- if .Values.frontend.enabled }}
+{{- $runtimeSecretName := default "devbox-frontend-runtime" .Values.frontend.runtimeSecret.name }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devbox-frontend-config
+  namespace: {{ .Values.frontend.namespace | quote }}
+data:
+  config.yaml: |-
+    addr: {{ .Values.frontend.config.addr }}
+---
+{{- if .Values.frontend.runtimeSecret.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $runtimeSecretName | quote }}
+  namespace: {{ .Values.frontend.namespace | quote }}
+type: Opaque
+stringData:
+  REGISTRY_USER: {{ include "devbox-v2-frontend.registryUser" . | quote }}
+  REGISTRY_PASSWORD: {{ include "devbox-v2-frontend.registryPassword" . | quote }}
+  DEVBOX_DOMAIN_CHALLENGE_SECRET: {{ include "devbox-v2-frontend.domainChallengeSecret" . | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devbox-frontend
+  namespace: {{ .Values.frontend.namespace | quote }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      app: devbox-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  template:
+    metadata:
+      labels:
+        app: devbox-frontend
+    spec:
+      initContainers:
+      - name: devbox-frontend-init
+        image: {{ include "devbox-v2-frontend.initImage" . | quote }}
+        imagePullPolicy: {{ .Values.frontend.initImage.pullPolicy }}
+        env:
+        - name: DATABASE_URL
+          value: {{ .Values.platform.databaseUrl | quote }}
+        - name: DATABASE_PROVIDER
+          value: {{ .Values.platform.databaseProvider | quote }}
+        command:
+        - sh
+        - -c
+        args:
+        - |-
+          cd /app
+          export PATH="/app/node_modules/.bin:$PATH"
+          MIGRATION="20260125094114_add_template_repository_kind"
+          HAS_MIGRATION=$(psql "$DATABASE_URL" -tAc "SELECT 1 FROM _prisma_migrations WHERE migration_name='${MIGRATION}' AND rolled_back_at IS NULL LIMIT 1;")
+          if [ "$HAS_MIGRATION" = "1" ]; then
+            prisma migrate deploy
+            exit 0
+          fi
+          HAS_ENUM=$(psql "$DATABASE_URL" -tAc "SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname IN ('TemplateRepositoryKind','template_repository_kind') AND e.enumlabel = 'SERVICE' LIMIT 1;")
+          if [ "$HAS_ENUM" = "1" ]; then
+            prisma migrate resolve --applied "$MIGRATION"
+          fi
+          prisma migrate deploy
+      containers:
+      - name: devbox-frontend
+        {{- if .Values.frontend.runtimeSecret.enabled }}
+        envFrom:
+        - secretRef:
+            name: {{ $runtimeSecretName | quote }}
+        {{- end }}
+        env:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: {{ .Values.platform.tlsRejectUnauthorized | quote }}
+        - name: DOCUMENT_URL_ZH
+          value: {{ .Values.frontend.env.documentUrlZh | quote }}
+        - name: DOCUMENT_URL_EN
+          value: {{ .Values.frontend.env.documentUrlEn | quote }}
+        - name: PRIVACY_URL_ZH
+          value: {{ .Values.frontend.env.privacyUrlZh | quote }}
+        - name: PRIVACY_URL_EN
+          value: {{ .Values.frontend.env.privacyUrlEn | quote }}
+        - name: SEALOS_DOMAIN
+          value: {{ .Values.cloudDomain | quote }}
+        - name: SSH_DOMAIN
+          value: {{ default "" .Values.frontend.env.sshDomain | quote }}
+        - name: INGRESS_SECRET
+          value: {{ default .Values.certSecretName .Values.frontend.env.ingressSecret | quote }}
+        - name: REGISTRY_ADDR
+          value: {{ include "devbox-v2-frontend.registryAddr" . | quote }}
+        {{- if not .Values.frontend.runtimeSecret.enabled }}
+        - name: REGISTRY_USER
+          value: {{ include "devbox-v2-frontend.registryUser" . | quote }}
+        - name: REGISTRY_PASSWORD
+          value: {{ include "devbox-v2-frontend.registryPassword" . | quote }}
+        {{- end }}
+        - name: DEVBOX_AFFINITY_ENABLE
+          value: {{ .Values.frontend.env.devboxAffinityEnable | quote }}
+        - name: METRICS_URL
+          value: {{ .Values.frontend.env.metricsUrl | quote }}
+        - name: MONITOR_URL
+          value: {{ .Values.frontend.env.monitorUrl | quote }}
+        - name: SQUASH_ENABLE
+          value: {{ .Values.frontend.env.squashEnable | quote }}
+        - name: ACCOUNT_URL
+          value: {{ .Values.frontend.env.accountUrl | quote }}
+        - name: APP_LAUNCHPAD_URL
+          value: {{ .Values.frontend.env.appLaunchpadUrl | quote }}
+        - name: ROOT_RUNTIME_NAMESPACE
+          value: {{ .Values.frontend.env.rootRuntimeNamespace | quote }}
+        - name: INGRESS_DOMAIN
+          value: {{ .Values.cloudDomain | quote }}
+        - name: CURRENCY_SYMBOL
+          value: {{ .Values.frontend.env.currencySymbol | quote }}
+        - name: GPU_ENABLE
+          value: {{ .Values.frontend.env.gpuEnable | quote }}
+        - name: PRIVACY_URL
+          value: {{ .Values.frontend.env.privacyUrlZh | quote }}
+        {{- with .Values.frontend.env.retagSvcUrl }}
+        - name: RETAG_SVC_URL
+          value: {{ . | quote }}
+        {{- end }}
+        - name: JWT_SECRET
+          value: {{ .Values.platform.jwtSecret | quote }}
+        - name: REGION_UID
+          value: {{ .Values.platform.regionUid | quote }}
+        - name: DATABASE_URL
+          value: {{ .Values.platform.databaseUrl | quote }}
+        - name: DATABASE_PROVIDER
+          value: {{ .Values.platform.databaseProvider | quote }}
+        - name: ENABLE_IMPORT_FEATURE
+          value: {{ .Values.frontend.env.enableImportFeature | quote }}
+        - name: ENABLE_WEBIDE_FEATURE
+          value: {{ .Values.frontend.env.enableWebideFeature | quote }}
+        - name: ENABLED_IDES
+          value: {{ .Values.frontend.env.enabledIDEs | quote }}
+        - name: ENABLE_ADVANCED_CONFIG
+          value: {{ .Values.frontend.env.enableAdvancedConfig | quote }}
+        - name: ENABLE_ADVANCED_ENV_AND_CONFIGMAP
+          value: {{ .Values.frontend.env.enableAdvancedEnvAndConfigmap | quote }}
+        - name: ENABLE_ADVANCED_NFS
+          value: {{ .Values.frontend.env.enableAdvancedNfs | quote }}
+        - name: ENABLE_ADVANCED_SHARED_MEMORY
+          value: {{ .Values.frontend.env.enableAdvancedSharedMemory | quote }}
+        - name: CPU_SLIDE_MARK_LIST
+          value: {{ .Values.frontend.env.cpuSlideMarkList | quote }}
+        - name: MEMORY_SLIDE_MARK_LIST
+          value: {{ .Values.frontend.env.memorySlideMarkList | quote }}
+        - name: STORAGE_LIMIT
+          value: {{ .Values.frontend.env.storageLimit | quote }}
+        - name: STORAGE_DEFAULT
+          value: {{ .Values.frontend.env.storageDefault | quote }}
+        {{- if not .Values.frontend.runtimeSecret.enabled }}
+        - name: DEVBOX_DOMAIN_CHALLENGE_SECRET
+          value: {{ include "devbox-v2-frontend.domainChallengeSecret" . | quote }}
+        {{- end }}
+        - name: NFS_STORAGE_CLASS_NAME
+          value: {{ .Values.frontend.env.nfsStorageClassName | quote }}
+        - name: NFS_MAX_SIZE
+          value: {{ .Values.frontend.env.nfsMaxSize | quote }}
+        - name: WEBIDE_PORT
+          value: {{ .Values.frontend.env.webidePort | quote }}
+        - name: CUSTOM_SCRIPTS
+          value: {{ .Values.frontend.env.customScripts | quote }}
+        - name: GPU_SCHEDULER_MODE
+          value: {{ .Values.frontend.env.gpuSchedulerMode | quote }}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        resources:
+          {{- toYaml .Values.frontend.resources | nindent 10 }}
+        image: {{ include "devbox-v2-frontend.frontendImage" . | quote }}
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        volumeMounts:
+        - name: devbox-frontend-volume
+          mountPath: /config.yaml
+          subPath: config.yaml
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - devbox-frontend
+              topologyKey: kubernetes.io/hostname
+      volumes:
+      - name: devbox-frontend-volume
+        configMap:
+          name: devbox-frontend-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: devbox-frontend
+  name: devbox-frontend
+  namespace: {{ .Values.frontend.namespace | quote }}
+spec:
+  ports:
+  - name: http
+    port: 3000
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: devbox-frontend
+{{- end }}
