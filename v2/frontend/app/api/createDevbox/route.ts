@@ -11,6 +11,7 @@ import {
   json2ConfigMap,
   json2PVC
 } from '@/utils/json2Yaml';
+import { getRuntimeTemplateConfig, getTemplateDefaults } from '@/utils/templateConfig';
 import { RequestSchema } from './schema';
 import { KBDevboxTypeV2 } from '@/types/k8s';
 
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     }
 
     const devboxForm = validationResult.data;
+    const hasExplicitEnvs = Object.prototype.hasOwnProperty.call(body, 'envs');
+    const hasExplicitConfigMaps = Object.prototype.hasOwnProperty.call(body, 'configMaps');
     const headerList = req.headers;
 
     const { applyYamlList } = await getK8s({
@@ -59,17 +62,25 @@ export async function POST(req: NextRequest) {
 
     const { INGRESS_SECRET, DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, NFS_STORAGE_CLASS_NAME } =
       process.env;
+    const templateDefaults = getTemplateDefaults(template.config);
+    const finalDevboxForm = {
+      ...devboxForm,
+      templateConfig: getRuntimeTemplateConfig(devboxForm.templateConfig),
+      envs: hasExplicitEnvs ? devboxForm.envs : templateDefaults.envs || [],
+      configMaps:
+        hasExplicitConfigMaps ? devboxForm.configMaps : templateDefaults.configMaps || []
+    };
 
     // Create PVC first (if volumes exist)
-    const pvc = json2PVC(devboxForm, NFS_STORAGE_CLASS_NAME || 'nfs-csi');
+    const pvc = json2PVC(finalDevboxForm, NFS_STORAGE_CLASS_NAME || 'nfs-csi');
 
     // Create ConfigMap (if configMaps exist)
-    const configMap = json2ConfigMap(devboxForm);
+    const configMap = json2ConfigMap(finalDevboxForm);
 
     // Create Devbox, Service, and Ingress
-    const devbox = json2Devbox(devboxForm, DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT);
-    const service = json2Service(devboxForm);
-    const ingress = json2Ingress(devboxForm, INGRESS_SECRET as string);
+    const devbox = json2Devbox(finalDevboxForm, DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT);
+    const service = json2Service(finalDevboxForm);
+    const ingress = json2Ingress(finalDevboxForm, INGRESS_SECRET as string);
 
     // Apply all YAMLs in order: PVC -> ConfigMap -> Devbox -> Service -> Ingress
     const yamlList = [pvc, configMap, devbox, service, ingress].filter((yaml) => yaml !== '');

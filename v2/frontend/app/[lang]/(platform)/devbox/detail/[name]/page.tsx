@@ -20,6 +20,7 @@ import AdvancedConfig from './components/AdvancedConfig';
 import { useEnvStore } from '@/stores/env';
 import { useGuideStore } from '@/stores/guide';
 import { useDevboxStore } from '@/stores/devbox';
+import { DevboxStatusEnum } from '@/constants/devbox';
 
 const DevboxDetailPage = ({ params }: { params: { name: string } }) => {
   const devboxName = params.name;
@@ -30,6 +31,7 @@ const DevboxDetailPage = ({ params }: { params: { name: string } }) => {
   const { guideIDE } = useGuideStore();
   const { devboxDetail, setDevboxDetail, loadDetailMonitorData, intervalLoadPods } =
     useDevboxStore();
+  const isRunning = devboxDetail?.status.value === DevboxStatusEnum.Running;
 
   const [initialized, setInitialized] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -64,15 +66,15 @@ const DevboxDetailPage = ({ params }: { params: { name: string } }) => {
   );
 
   useQuery(
-    ['loadDetailMonitorData', devboxName, devboxDetail?.isPause],
+    ['loadDetailMonitorData', devboxName, devboxDetail?.status.value],
     () => {
-      if (devboxDetail?.isPause) return null;
+      if (!isRunning) return null;
       return loadDetailMonitorData(devboxName);
     },
     {
-      enabled: initialized && !!devboxDetail && !devboxDetail?.isPause,
+      enabled: initialized && !!devboxDetail && isRunning,
       refetchOnMount: true,
-      refetchInterval: 2 * 60 * 1000
+      refetchInterval: isRunning ? 2 * 60 * 1000 : false
     }
   );
 

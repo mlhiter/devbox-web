@@ -1,13 +1,21 @@
 export interface SourcePrice {
   cpu: number;
   memory: number;
+  storage?: number;
   gpu?: {
-    alias: string;
-    type: string;
+    annotationType: string;
+    product?: string;
     price: number;
     available: number;
     count: number;
     vm: number;
+    icon?: string;
+    name?: {
+      zh?: string;
+      en?: string;
+    };
+    resource?: Record<string, string>;
+    nodes?: string[];
   }[];
 }
 
@@ -21,6 +29,7 @@ export interface Env {
   ingressSecret: string;
   registryAddr: string;
   devboxAffinityEnable: string;
+  gpuSchedulerMode: 'hami' | 'native';
   namespace: string;
   rootRuntimeNamespace: string;
   ingressDomain: string;
@@ -28,10 +37,12 @@ export interface Env {
   storageLimit: string;
   enableImportFeature: string;
   enableWebideFeature: string;
+  enabledIDEs: string;
   enableAdvancedConfig: string;
   cpuSlideMarkList: string;
   memorySlideMarkList: string;
   nfsStorageClassName: string;
+  nfsMaxSize: number;
   webIdePort: number;
 }
 

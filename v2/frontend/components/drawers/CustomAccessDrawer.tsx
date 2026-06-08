@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { InfoIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -14,12 +14,36 @@ import { Input } from '@labring/sealos-ui/input';
 import { Button } from '@labring/sealos-ui/button';
 
 import { postAuthCname, postAuthDomainChallenge } from '@/api/platform';
-import { useRequest } from '@/hooks/useRequest';
 import { useEnvStore } from '@/stores/env';
+import { getErrText } from '@/utils/tools';
 
 export type CustomAccessDrawerParams = {
   publicDomain: string;
   customDomain: string;
+};
+
+const getCustomDomainErrorKey = (message: string) => {
+  if (message.includes('ENOTFOUND')) {
+    return 'custom_domain_error_not_found';
+  }
+
+  if (message.includes('ENODATA')) {
+    return 'custom_domain_error_no_cname';
+  }
+
+  if (message.includes("cname is not equal to publicDomain")) {
+    return 'custom_domain_error_cname_mismatch';
+  }
+
+  if (message.includes('CHALLENGE_TIMEOUT') || message.includes('timeout')) {
+    return 'custom_domain_error_timeout';
+  }
+
+  if (message.includes('CHALLENGE_NETWORK_ERROR')) {
+    return 'custom_domain_error_network';
+  }
+
+  return '';
 };
 
 const CustomAccessDrawer = ({
@@ -31,22 +55,25 @@ const CustomAccessDrawer = ({
   const ref = useRef<HTMLInputElement>(null);
   const t = useTranslations();
   const { env } = useEnvStore();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const { mutate: authDomain, isLoading } = useRequest({
-    mutationFn: async () => {
-      const val = ref.current?.value || '';
-      if (!val) {
-        return '';
-      }
+  const authDomain = async () => {
+    const val = ref.current?.value.trim() || '';
+    if (!val) {
+      toast.error(t('Input your custom domain'));
+      return;
+    }
 
-      if (val.endsWith(`.${env.ingressDomain}`) || val.endsWith(`.${env.sealosDomain}`)) {
-        toast.error(t('cannot_use_internal_domain'));
-        throw new Error('Cannot use internal domain');
-      }
+    if (val.endsWith(`.${env.ingressDomain}`) || val.endsWith(`.${env.sealosDomain}`)) {
+      toast.error(t('cannot_use_internal_domain'));
+      return;
+    }
 
+    setIsLoading(true);
+    try {
       try {
         await postAuthCname({
-          publicDomain: publicDomain,
+          publicDomain,
           customDomain: val
         });
         return val;
@@ -65,10 +92,29 @@ const CustomAccessDrawer = ({
           throw cnameError;
         }
       }
-    },
-    onSuccess,
-    errorToast: 'Custom Domain Error'
-  });
+    } catch (error) {
+      const errorMessage = getErrText(error, 'custom_domain_verify_failed');
+      const errorKey = getCustomDomainErrorKey(errorMessage);
+      toast.error(t('custom_domain_verify_failed'), {
+        description: errorKey ? t(errorKey) : errorMessage
+      });
+      return;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    const verifiedDomain = await authDomain();
+    if (!verifiedDomain) {
+      return;
+    }
+
+    onSuccess(verifiedDomain);
+    toast.success(t('custom_domain_verified'), {
+      description: t('custom_domain_save_tip')
+    });
+  };
 
   return (
     <Drawer open onOpenChange={() => onClose()}>
@@ -96,7 +142,7 @@ const CustomAccessDrawer = ({
           </div>
         </div>
         <DrawerFooter>
-          <Button className="w-20" disabled={isLoading} onClick={() => authDomain()}>
+          <Button className="w-20" disabled={isLoading} onClick={handleConfirm}>
             {t('confirm')}
           </Button>
         </DrawerFooter>

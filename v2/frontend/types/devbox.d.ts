@@ -31,7 +31,9 @@ export type ShutdownModeType = 'Stopped' | 'Shutdown' | 'Paused';
 export type GpuType = {
   manufacturers: string;
   type: string;
+  product?: string;
   amount: number;
+  resource?: Record<string, string>;
 };
 
 export interface DevboxEnvType {

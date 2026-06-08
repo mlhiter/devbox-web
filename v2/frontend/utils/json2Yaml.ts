@@ -1,6 +1,13 @@
 import yaml from 'js-yaml';
 
-import { devboxKey, gpuNodeSelectorKey, gpuResourceKey, publicDomainKey } from '@/constants/devbox';
+import {
+  devboxKey,
+  gpuNodeSelectorKey,
+  gpuResourceKey,
+  gpuTypeAnnotationKey,
+  normalizeGpuSchedulerMode,
+  publicDomainKey
+} from '@/constants/devbox';
 import { DevboxEditTypeV2, json2DevboxData, ProtocolType } from '@/types/devbox';
 import { produce } from 'immer';
 import { nanoid, parseTemplateConfig, str2Num } from './tools';
@@ -10,6 +17,7 @@ const getConfigMapFileName = (path: string, fallbackId: string) =>
   path.split('/').filter(Boolean).pop() || `config-${fallbackId}`;
 
 const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
+const GPU_CORES_DEFAULT = 100;
 
 const normalizeStorageLimit = (storageLimit?: string) =>
   storageLimitOptions.includes(storageLimit || '') ? storageLimit : '10Gi';
@@ -17,16 +25,30 @@ const normalizeStorageLimit = (storageLimit?: string) =>
 export const json2Devbox = (
   data: Omit<json2DevboxData, 'templateRepositoryUid'>,
   devboxAffinityEnable: string = 'true',
-  storageLimit: string = '10Gi'
+  storageLimit: string = '10Gi',
+  gpuSchedulerMode: string = 'native'
 ) => {
   const resolvedStorageLimit = normalizeStorageLimit(data.storageLimit || storageLimit);
-  const gpuMap = !!data.gpu?.type
-    ? {
-        nodeSelector: {
-          [gpuNodeSelectorKey]: data.gpu.type
+  const normalizedGpuSchedulerMode = normalizeGpuSchedulerMode(gpuSchedulerMode);
+  const gpuResourceKeyValue = data.gpu?.resource?.card || gpuResourceKey;
+  const gpuCoresResourceKeyValue = data.gpu?.resource?.cores;
+  const hasGpu = !!data.gpu?.type;
+  const hasGpuCores = hasGpu && !!gpuCoresResourceKeyValue;
+  if (hasGpu && normalizedGpuSchedulerMode === 'native' && !data.gpu?.product) {
+    throw new Error('GPU product is required when GPU_SCHEDULER_MODE is native');
+  }
+  const gpuConfigAnnotation =
+    hasGpu && normalizedGpuSchedulerMode === 'hami'
+      ? {
+          [gpuTypeAnnotationKey]: data.gpu?.type || ''
         }
-      }
-    : {};
+      : undefined;
+  const gpuNodeSelector =
+    hasGpu && normalizedGpuSchedulerMode === 'native' && data.gpu?.product
+      ? {
+          [gpuNodeSelectorKey]: data.gpu.product
+        }
+      : undefined;
 
   let json: any = {
     apiVersion: 'devbox.sealos.io/v1alpha2',
@@ -45,14 +67,15 @@ export const json2Devbox = (
         cpu: `${str2Num(Math.floor(data.cpu))}m`,
         memory: `${str2Num(data.memory)}Mi`,
         'ephemeral-storage': resolvedStorageLimit,
-        ...(!!data.gpu?.type ? { [gpuResourceKey]: data.gpu.amount } : {})
+        ...(hasGpu ? { [gpuResourceKeyValue]: data.gpu?.amount || 0 } : {}),
+        ...(hasGpuCores ? { [gpuCoresResourceKeyValue]: GPU_CORES_DEFAULT } : {})
       },
-      ...(!!data.gpu?.type ? { runtimeClassName: 'nvidia' } : {}),
       templateID: data.templateUid,
       image: data.image,
       ...(data.mergeBaseImageTopLayer !== undefined
         ? { mergeBaseImageTopLayer: data.mergeBaseImageTopLayer }
         : {}),
+      ...(gpuNodeSelector ? { nodeSelector: gpuNodeSelector } : {}),
       config: produce(parseTemplateConfig(data.templateConfig), (draft) => {
         draft.appPorts = data.networks.map((item) => ({
           port: str2Num(item.port),
@@ -60,6 +83,18 @@ export const json2Devbox = (
           protocol: 'TCP',
           targetPort: str2Num(item.port)
         }));
+        const draftAny = draft as any;
+        if (gpuConfigAnnotation) {
+          draftAny.annotations = {
+            ...(draftAny.annotations || {}),
+            ...gpuConfigAnnotation
+          };
+        } else if (draftAny.annotations?.[gpuTypeAnnotationKey]) {
+          delete draftAny.annotations[gpuTypeAnnotationKey];
+          if (Object.keys(draftAny.annotations).length === 0) {
+            delete draftAny.annotations;
+          }
+        }
 
         // Clear user-configurable fields to rebuild from form data
         const newEnv: any[] = [];
@@ -131,7 +166,6 @@ export const json2Devbox = (
         draft.volumeMounts = newVolumeMounts.length > 0 ? newVolumeMounts : undefined;
       }),
       state: 'Running',
-      ...gpuMap,
       runtimeClassName: 'devbox-runtime',
       storageLimit: resolvedStorageLimit
     }
@@ -449,6 +483,7 @@ export const generateYamlList = (
   env: {
     devboxAffinityEnable?: string;
     storageLimit?: string;
+    gpuSchedulerMode?: string;
     ingressSecret: string;
     nfsStorageClassName?: string;
   }
@@ -476,7 +511,7 @@ export const generateYamlList = (
       : []),
     {
       filename: 'devbox.yaml',
-      value: json2Devbox(data, env.devboxAffinityEnable, env.storageLimit)
+      value: json2Devbox(data, env.devboxAffinityEnable, env.storageLimit, env.gpuSchedulerMode)
     },
     ...(data.networks.length > 0
       ? [

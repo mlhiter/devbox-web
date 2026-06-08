@@ -22,20 +22,30 @@ export type Session = {
 export type userPriceType = {
   cpu: number;
   memory: number;
+  storage?: number;
   gpu?: {
-    alias: string;
-    type: string;
+    annotationType: string;
+    product?: string;
     price: number;
     available: number;
     count: number;
     vm: number;
+    icon?: string;
+    name?: {
+      zh?: string;
+      en?: string;
+    };
+    resource?: Record<string, string>;
+    nodes?: string[];
   }[];
 };
 
 export type GpuType = {
   manufacturers: string;
   type: string;
+  product?: string;
   amount: number;
+  resource?: Record<string, string>;
 };
 
 export type UserTask = {

@@ -20,6 +20,13 @@ routes under `app/api`.
   build arguments here.
 - The deployment has both `devbox-frontend-init` and `devbox-frontend`
   containers. Inspect both image tags when verifying a rollout.
+- The Sealos deployment package now lives in `v2/frontend/deploy` and installs
+  the `deploy/charts/devbox-v2-frontend` Helm chart through `install.sh`; do not
+  use the removed `deploy/manifests/*.tmpl` files as source of truth.
+- Runtime registry credentials and the domain challenge secret should be carried
+  by the `devbox-frontend-runtime` Secret and loaded through `envFrom`. Keep
+  `REGISTRY_USER`, `REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET`
+  out of explicit Deployment env when the runtime Secret is enabled.
 - Frontend-side template image retagging is HTTPS-only. Do not reintroduce
   `REGISTRY_INSECURE` or `registryInsecure`; configure `REGISTRY_ADDR` as an
   HTTPS-capable registry host.
@@ -30,6 +37,7 @@ routes under `app/api`.
 ```bash
 pnpm ts-lint
 git diff --check
+make -C v2/frontend/deploy lint
 ```
 
 The package has no `test` script as of 2026-05-21, so generic test autodetection

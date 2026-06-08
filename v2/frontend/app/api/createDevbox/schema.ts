@@ -1,7 +1,35 @@
 import 'zod-openapi/extend';
 import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
+import {
+  normalizeMountPath,
+  validateMountPath,
+  type MountPathValidationError
+} from '@/utils/mountPath';
 export const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz', 12);
+
+const DEFAULT_NFS_MAX_SIZE = 20;
+const parsedNfsMaxSize = Number(process.env.NFS_MAX_SIZE);
+const nfsMaxSize =
+  Number.isFinite(parsedNfsMaxSize) && parsedNfsMaxSize >= 1
+    ? Math.floor(parsedNfsMaxSize)
+    : DEFAULT_NFS_MAX_SIZE;
+
+const getVolumePathErrorMessage = (pathError: MountPathValidationError) => {
+  if (pathError === 'empty') {
+    return 'Volume path cannot be empty';
+  }
+
+  if (pathError === 'not_absolute') {
+    return 'Volume path must be an absolute path starting with "/"';
+  }
+
+  if (pathError === 'protected_path') {
+    return 'Volume path is protected and cannot be mounted';
+  }
+
+  return 'Volume path format is invalid';
+};
 
 const GpuSchema = z
   .object({
@@ -109,9 +137,17 @@ export const RequestSchema = z
       .array(
         z.object({
           id: z.string().optional(),
-          path: z.string().refine((path) => path.startsWith('/'), {
-            message: 'ConfigMap path must be an absolute path starting with "/"'
-          }),
+          path: z
+            .string()
+            .refine((path) => path.startsWith('/'), {
+              message: 'ConfigMap path must be an absolute path starting with "/"'
+            })
+            .refine((path) => !path.endsWith('/'), {
+              message: 'ConfigMap path must include a file name'
+            })
+            .refine((path) => !path.split('/').includes('..'), {
+              message: 'ConfigMap path cannot contain ".." segments'
+            }),
           content: z.string()
         })
       )
@@ -124,10 +160,19 @@ export const RequestSchema = z
       .array(
         z.object({
           id: z.string().optional(),
-          path: z.string().refine((path) => path.startsWith('/'), {
-            message: 'Volume path must be an absolute path starting with "/"'
-          }),
-          size: z.number().min(1).max(20)
+          path: z
+            .string()
+            .transform((path) => normalizeMountPath(path))
+            .superRefine((path, ctx) => {
+              const { error } = validateMountPath(path);
+              if (!error) return;
+
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: getVolumePathErrorMessage(error)
+              });
+            }),
+          size: z.number().min(1).max(nfsMaxSize)
         })
       )
       .optional()

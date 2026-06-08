@@ -5,11 +5,18 @@ import { getK8s } from '@/services/backend/kubernetes';
 import { jsonRes } from '@/services/backend/response';
 import { defaultEnv } from '@/stores/env';
 import type { Env } from '@/types/static';
+import { normalizeGpuSchedulerMode } from '@/constants/devbox';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    const parsedNfsMaxSize = Number(process.env.NFS_MAX_SIZE);
+    const nfsMaxSize =
+      Number.isFinite(parsedNfsMaxSize) && parsedNfsMaxSize >= 1
+        ? Math.floor(parsedNfsMaxSize)
+        : defaultEnv.nfsMaxSize;
+
     const headerList = req.headers;
 
     const { namespace } = await getK8s({
@@ -27,6 +34,7 @@ export async function GET(req: NextRequest) {
         ingressSecret: process.env.INGRESS_SECRET || defaultEnv.ingressSecret,
         registryAddr: process.env.REGISTRY_ADDR || defaultEnv.registryAddr,
         devboxAffinityEnable: process.env.DEVBOX_AFFINITY_ENABLE || defaultEnv.devboxAffinityEnable,
+        gpuSchedulerMode: normalizeGpuSchedulerMode(process.env.GPU_SCHEDULER_MODE),
         storageLimit: process.env.STORAGE_LIMIT || defaultEnv.storageLimit,
         namespace: namespace || defaultEnv.namespace,
         rootRuntimeNamespace: process.env.ROOT_RUNTIME_NAMESPACE || defaultEnv.rootRuntimeNamespace,
@@ -37,10 +45,12 @@ export async function GET(req: NextRequest) {
           | 'usd',
         enableImportFeature: process.env.ENABLE_IMPORT_FEATURE || defaultEnv.enableImportFeature,
         enableWebideFeature: process.env.ENABLE_WEBIDE_FEATURE || defaultEnv.enableWebideFeature,
+        enabledIDEs: process.env.ENABLED_IDES || defaultEnv.enabledIDEs,
         enableAdvancedConfig: process.env.ENABLE_ADVANCED_CONFIG || defaultEnv.enableAdvancedConfig,
         cpuSlideMarkList: process.env.CPU_SLIDE_MARK_LIST || defaultEnv.cpuSlideMarkList,
         memorySlideMarkList: process.env.MEMORY_SLIDE_MARK_LIST || defaultEnv.memorySlideMarkList,
         nfsStorageClassName: process.env.NFS_STORAGE_CLASS_NAME || defaultEnv.nfsStorageClassName,
+        nfsMaxSize,
         webIdePort: Number(process.env.WEBIDE_PORT) || defaultEnv.webIdePort
       }
     });

@@ -55,10 +55,22 @@ Versioned API routes also exist under `app/api/v1` and `app/api/v2alpha`.
 
 ## Deployment Shape
 
-The frontend deploy package renders a Kubernetes Deployment with:
+The frontend deploy package under `deploy/` installs the
+`deploy/charts/devbox-v2-frontend` Helm chart through `install.sh`. The chart
+renders:
 
+- runtime Secret `devbox-frontend-runtime` for `REGISTRY_USER`,
+  `REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET`.
+- ConfigMap `devbox-frontend-config`.
 - init container `devbox-frontend-init` for migration deployment.
 - main container `devbox-frontend` for the Next.js app.
 - service `devbox-frontend`.
 - ingress `devbox.<cloudDomain>`.
 - challenge ingress for `/.well-known/devbox-domain-challenge`.
+- App CR `app-system/devbox`.
+
+The Deployment loads the runtime Secret through `envFrom`; non-secret
+deployment contract values such as `METRICS_URL`, `STORAGE_LIMIT`,
+`APP_LAUNCHPAD_URL`, `ENABLE_ADVANCED_CONFIG`, and `GPU_SCHEDULER_MODE` remain
+explicit environment variables so operators can compare live cluster state with
+the rendered chart.

@@ -1,0 +1,16 @@
+{{- $namespaces := dict -}}
+{{- if .Values.frontend.enabled }}
+{{- $_ := set $namespaces .Values.frontend.namespace true -}}
+{{- end }}
+{{- range $namespace, $_ := $namespaces }}
+{{- if ne $namespace $.Release.Namespace }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: devbox-v2-frontend
+  name: {{ $namespace | quote }}
+{{- end }}
+{{- end }}

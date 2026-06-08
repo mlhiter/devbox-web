@@ -14,9 +14,16 @@ import type { YamlItemType } from '@/types';
 import { patchYamlList } from '@/utils/tools';
 import { useConfirm } from '@/hooks/useConfirm';
 import { generateYamlList } from '@/utils/json2Yaml';
-import { createDevbox, updateDevbox } from '@/api/devbox';
-import type { DevboxEditTypeV2, DevboxKindsType } from '@/types/devbox';
-import { defaultDevboxEditValueV2, editModeMap } from '@/constants/devbox';
+import { createDevbox, restartDevbox, updateDevbox } from '@/api/devbox';
+import type { DevboxEditTypeV2, DevboxKindsType, DevboxPatchPropsType } from '@/types/devbox';
+import {
+  defaultDevboxEditValueV2,
+  editModeMap,
+  GPU_AMOUNT_MAX,
+  gpuNodeSelectorKey,
+  gpuTypeAnnotationKey,
+  YamlKindEnum
+} from '@/constants/devbox';
 
 import { useEnvStore } from '@/stores/env';
 import { useIDEStore } from '@/stores/ide';
@@ -40,6 +47,33 @@ const omitMergeBaseImageTopLayer = (formData: DevboxEditTypeV2): DevboxEditTypeV
   delete editableFormData.mergeBaseImageTopLayer;
 
   return editableFormData;
+};
+
+const normalizeConfigMaps = (configMaps: DevboxEditTypeV2['configMaps'] = []) =>
+  JSON.stringify(
+    configMaps
+      .map((item) => ({
+        id: item.id || '',
+        path: item.path,
+        content: item.content
+      }))
+      .sort((a, b) => `${a.id}:${a.path}`.localeCompare(`${b.id}:${b.path}`))
+  );
+
+const isPlainObject = (value: unknown): value is Record<string, any> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const mergeJsonMergePatch = (target: Record<string, any>, source: Record<string, any>) => {
+  Object.entries(source).forEach(([key, value]) => {
+    if (isPlainObject(value) && isPlainObject(target[key])) {
+      mergeJsonMergePatch(target[key], value);
+      return;
+    }
+
+    target[key] = value;
+  });
+
+  return target;
 };
 
 const DevboxCreatePage = () => {
@@ -103,12 +137,18 @@ const DevboxCreatePage = () => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const isEdit = useMemo(() => !!devboxName, []);
+  const maxGpuAmount = GPU_AMOUNT_MAX;
 
   const { title, applyBtnText, applyMessage, applySuccess, applyError } = editModeMap(isEdit);
 
   const { openConfirm, ConfirmChild } = useConfirm({
     content: applyMessage
   });
+  const { openConfirm: openConfigMapRestartConfirm, ConfirmChild: ConfigMapRestartConfirmChild } =
+    useConfirm({
+      content: 'confirm_update_configmap_restart_devbox',
+      confirmText: 'confirm_update_and_restart'
+    });
 
   const templateRepositoryUid = formHook.watch('templateRepositoryUid');
   const isValidTemplateRepositoryUid = z.string().uuid().safeParse(templateRepositoryUid).success;
@@ -143,12 +183,33 @@ const DevboxCreatePage = () => {
   );
 
   const countGpuInventory = useCallback(
-    (type?: string) => {
-      const available = sourcePrice?.gpu?.find((item) => item.type === type)?.available || 0;
+    (type?: string, product?: string) => {
+      if (!type) return 0;
+      const gpuItems =
+        sourcePrice?.gpu?.filter((item) =>
+          env.gpuSchedulerMode === 'native'
+            ? item.annotationType === type && item.product === product
+            : item.annotationType === type
+        ) || [];
+      const available = gpuItems.reduce((sum, item) => sum + (item.available || 0), 0);
+      const total = gpuItems.reduce((sum, item) => sum + (item.count || 0), 0);
 
-      return available;
+      if (!isEdit) {
+        return available;
+      }
+
+      const originalGpu = oldDevboxEditData.current?.gpu;
+      if (
+        !originalGpu ||
+        originalGpu.type !== type ||
+        (env.gpuSchedulerMode === 'native' && originalGpu.product !== product)
+      ) {
+        return available;
+      }
+
+      return Math.min(available + (originalGpu.amount || 0), total);
     },
-    [sourcePrice?.gpu]
+    [env.gpuSchedulerMode, isEdit, sourcePrice?.gpu]
   );
 
   useEffect(() => {
@@ -199,6 +260,64 @@ const DevboxCreatePage = () => {
   );
   const { guideConfigDevbox } = useGuideStore();
 
+  const hasConfigMapsChanged = useCallback(
+    (formData: DevboxEditTypeV2) => {
+      if (!isEdit || !oldDevboxEditData.current) return false;
+
+      return (
+        normalizeConfigMaps(oldDevboxEditData.current.configMaps) !==
+        normalizeConfigMaps(formData.configMaps)
+      );
+    },
+    [isEdit]
+  );
+
+  const buildGpuSchedulerCleanupPatchValue = useCallback(
+    (formData: DevboxEditTypeV2): Record<string, any> | undefined => {
+      const hasCurrentGpu = !!formData.gpu?.type;
+      const hadGpu = !!oldDevboxEditData.current?.gpu;
+
+      if (!hasCurrentGpu && !hadGpu) {
+        return undefined;
+      }
+
+      const spec: Record<string, any> = {};
+      if (hasCurrentGpu && env.gpuSchedulerMode === 'native') {
+        spec.nodeSelector = {
+          [gpuNodeSelectorKey]: formData.gpu?.product
+        };
+      } else if (!hasCurrentGpu || env.gpuSchedulerMode === 'hami') {
+        spec.nodeSelector = {
+          [gpuNodeSelectorKey]: null
+        };
+      }
+
+      if (hasCurrentGpu && env.gpuSchedulerMode === 'hami') {
+        spec.config = {
+          annotations: {
+            [gpuTypeAnnotationKey]: formData.gpu?.type
+          }
+        };
+      } else if (!hasCurrentGpu || env.gpuSchedulerMode === 'native') {
+        spec.config = {
+          annotations: {
+            [gpuTypeAnnotationKey]: null
+          }
+        };
+      }
+
+      return Object.keys(spec).length > 0
+        ? {
+            metadata: {
+              name: formData.name
+            },
+            spec
+          }
+        : undefined;
+    },
+    [env.gpuSchedulerMode]
+  );
+
   const submitSuccess = async (formData: DevboxEditTypeV2) => {
     if (!guideConfigDevbox) {
       return router.push('/devbox/detail/devbox-mock');
@@ -206,7 +325,15 @@ const DevboxCreatePage = () => {
 
     // gpu inventory check
     if (formData.gpu?.type) {
-      const inventory = countGpuInventory(formData.gpu?.type);
+      if (env.gpuSchedulerMode === 'native' && !formData.gpu.product) {
+        return toast.warning(t('submit_form_error'));
+      }
+
+      if (formData.gpu.amount > maxGpuAmount) {
+        return toast.warning(t('Gpu amount over max Tip', { max: maxGpuAmount }));
+      }
+
+      const inventory = countGpuInventory(formData.gpu.type, formData.gpu.product);
       if (formData.gpu?.amount > inventory) {
         return toast.warning(
           t('Gpu under inventory Tip', {
@@ -217,6 +344,8 @@ const DevboxCreatePage = () => {
     }
 
     // update
+    const shouldRestartAfterUpdate = isEdit && hasConfigMapsChanged(formData);
+
     if (isEdit) {
       const yamlList = generateYamlList(omitMergeBaseImageTopLayer(formData), env);
       setYamlList(yamlList);
@@ -225,23 +354,44 @@ const DevboxCreatePage = () => {
       const areYamlListsEqual =
         new Set(parsedNewYamlList).size === new Set(parsedOldYamlList).size &&
         [...new Set(parsedNewYamlList)].every((item) => new Set(parsedOldYamlList).has(item));
-      if (areYamlListsEqual) {
-        return toast.info(t('No changes detected'));
-      }
       if (!parsedNewYamlList) {
         return toast.warning(t('submit_form_error'));
+      }
+      const cleanupPatchValue = buildGpuSchedulerCleanupPatchValue(formData);
+      if (areYamlListsEqual && !cleanupPatchValue) {
+        return toast.info(t('No changes detected'));
       }
       const patch = patchYamlList({
         parsedOldYamlList: parsedOldYamlList,
         parsedNewYamlList: parsedNewYamlList,
         originalYamlList: crOldYamls.current
       });
+      if (cleanupPatchValue) {
+        const devboxPatch = patch.find(
+          (item): item is Extract<DevboxPatchPropsType[number], { type: 'patch' }> =>
+            item.type === 'patch' && item.kind === YamlKindEnum.Devbox
+        );
+
+        if (devboxPatch) {
+          mergeJsonMergePatch(devboxPatch.value, cleanupPatchValue);
+        } else {
+          patch.push({
+            type: 'patch',
+            kind: YamlKindEnum.Devbox,
+            value: cleanupPatchValue
+          });
+        }
+      }
       await executeOperation(
-        () =>
-          updateDevbox({
+        async () => {
+          await updateDevbox({
             patch,
             devboxName: formData.name
-          }),
+          });
+          if (shouldRestartAfterUpdate) {
+            await restartDevbox({ devboxName: formData.name });
+          }
+        },
         {
           onSuccess: () => {
             track({
@@ -249,6 +399,13 @@ const DevboxCreatePage = () => {
               module: 'devbox',
               context: 'app'
             });
+            if (shouldRestartAfterUpdate) {
+              track({
+                event: 'deployment_restart',
+                module: 'devbox',
+                context: 'app'
+              });
+            }
             addDevboxIDE('vscode', formData.name);
             if (sourcePrice?.gpu) {
               refetchPrice();
@@ -256,7 +413,7 @@ const DevboxCreatePage = () => {
             setStartedTemplate(undefined);
             router.push(`/devbox/detail/${formData.name}`);
           },
-          successMessage: t(applySuccess)
+          successMessage: t(shouldRestartAfterUpdate ? 'update_and_restart_success' : applySuccess)
         }
       );
     } else {
@@ -320,7 +477,13 @@ const DevboxCreatePage = () => {
       allowContinue: false
     },
     () => {
-      formHook.handleSubmit((data) => openConfirm(() => submitSuccess(data))(), submitError)();
+      formHook.handleSubmit(
+        (data) =>
+          (hasConfigMapsChanged(data) ? openConfigMapRestartConfirm : openConfirm)(() =>
+            submitSuccess(data)
+          )(),
+        submitError
+      )();
     }
   );
 
@@ -352,6 +515,7 @@ const DevboxCreatePage = () => {
         </div>
       </FormProvider>
       <ConfirmChild />
+      <ConfigMapRestartConfirmChild />
       <ErrorModal
         isOpen={errorModalState.isOpen}
         onClose={closeErrorModal}

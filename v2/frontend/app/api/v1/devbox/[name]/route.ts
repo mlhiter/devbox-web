@@ -926,6 +926,7 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
       runtime: resolvedTemplate.templateRepository?.iconId || '',
       image: resolvedTemplate.image,
       status: devboxBody.status?.phase || 'Pending',
+      createTime: devboxBody.metadata?.creationTimestamp || '',
       resources,
       ssh,
       env,

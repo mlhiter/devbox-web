@@ -4,10 +4,11 @@
 
 - `README.md` - local frontend setup.
 - `.env.template` - environment variable template.
-- `deploy/manifests/deploy.yaml.tmpl` - deployment and migration container
-  shape.
-- `deploy/manifests/ingress.yaml.tmpl` - frontend and domain-challenge ingress
-  shape.
+- `deploy/Kubefile` - Sealos package entrypoint for the frontend chart.
+- `deploy/install.sh` - cluster install script that reads Sealos global and app
+  values before running Helm.
+- `deploy/charts/devbox-v2-frontend` - Helm chart for the frontend Deployment,
+  runtime Secret, Service, Ingresses, and App CR.
 - `services/backend/registry-retag.ts` - HTTPS-only registry retag helper.
 
 ## Related Notes

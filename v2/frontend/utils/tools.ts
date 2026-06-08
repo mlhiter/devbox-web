@@ -6,10 +6,14 @@ import duration from 'dayjs/plugin/duration';
 import * as jsonpatch from 'fast-json-patch';
 import { useTranslations } from 'next-intl';
 
-import { YamlKindEnum } from '@/constants/devbox';
+import { YamlKindEnum, gpuTypeAnnotationKey } from '@/constants/devbox';
 import type { DevboxKindsType, DevboxPatchPropsType } from '@/types/devbox';
 
 dayjs.extend(duration);
+
+const decodeJsonPointerToken = (token: string) => token.replace(/~1/g, '/').replace(/~0/g, '~');
+const isUnsafeProtoKey = (key: string) =>
+  key === '__proto__' || key === 'prototype' || key === 'constructor';
 
 export function downLoadBlob(content: BlobPart, type: string, fileName: string) {
   const blob = new Blob([content], { type });
@@ -167,6 +171,58 @@ export const patchYamlList = ({
 
           const patchResYamlJson = jsonpatch.applyPatch(crOldYamlJson, _patchRes, true).newDocument;
 
+          _patchRes.forEach((op) => {
+            if (oldFormJson.kind !== YamlKindEnum.Devbox) return;
+
+            if (op.op === 'remove') {
+              if (op.path === '/spec/config/annotations') {
+                const oldAnnotations = (oldFormJson as any)?.spec?.config?.annotations;
+                if (oldAnnotations?.[gpuTypeAnnotationKey]) {
+                  if (!(patchResYamlJson as any).spec.config.annotations) {
+                    (patchResYamlJson as any).spec.config.annotations = {};
+                  }
+                  (patchResYamlJson as any).spec.config.annotations[gpuTypeAnnotationKey] = null;
+                }
+                return;
+              }
+
+              if (
+                op.path.startsWith('/spec/resource/') ||
+                op.path.startsWith('/spec/config/annotations/')
+              ) {
+                const fieldPath = op.path
+                  .split('/')
+                  .slice(1)
+                  .map(decodeJsonPointerToken);
+                if (fieldPath.some(isUnsafeProtoKey)) {
+                  return;
+                }
+
+                const nullOp: jsonpatch.Operation = {
+                  op: 'add',
+                  path: op.path,
+                  value: null
+                };
+                const nullOpError = jsonpatch.validate([nullOp], patchResYamlJson);
+                if (!nullOpError) {
+                  jsonpatch.applyPatch(patchResYamlJson, [nullOp], true);
+                }
+              }
+            } else if (op.op === 'replace' && op.path === '/spec/config/annotations') {
+              const oldAnnotations = (oldFormJson as any)?.spec?.config?.annotations;
+              const newAnnotations = (op as any).value;
+              if (
+                oldAnnotations?.[gpuTypeAnnotationKey] &&
+                (!newAnnotations || !newAnnotations[gpuTypeAnnotationKey])
+              ) {
+                if (!(patchResYamlJson as any).spec.config.annotations) {
+                  (patchResYamlJson as any).spec.config.annotations = {};
+                }
+                (patchResYamlJson as any).spec.config.annotations[gpuTypeAnnotationKey] = null;
+              }
+            }
+          });
+
           // delete invalid field
           // @ts-ignore
           delete patchResYamlJson.status;
@@ -319,5 +375,6 @@ export const parseTemplateConfig = (config: string) => {
       mountPath: string;
       subPath?: string;
     }[];
+    annotations?: Record<string, string>;
   };
 };

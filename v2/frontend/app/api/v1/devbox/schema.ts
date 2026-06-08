@@ -109,6 +109,13 @@ const ResourceConfig = z.object({
   })
 });
 
+const StorageLimitSchema = z
+  .enum(['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'])
+  .optional()
+  .openapi({
+    description: 'Storage capacity limit'
+  });
+
 const EnvConfig = z
   .object({
     name: z.string().min(1).openapi({
@@ -156,6 +163,7 @@ export const RequestSchema = z.object({
   resource: ResourceConfig.openapi({
     description: 'Resource allocation for CPU and memory'
   }),
+  storageLimit: StorageLimitSchema,
   ports: z.array(PortConfig).optional().default([]).openapi({
     description: 'Port configurations (optional, can be empty)'
   }),

@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { PassThrough } from 'stream';
+import { once } from 'events';
 
 import { authSession } from '@/services/backend/auth';
 import { getK8s } from '@/services/backend/kubernetes';
 import { jsonRes } from '@/services/backend/response';
 import { KubeFileSystem } from '@/utils/kubeFileSystem';
 import { sleep, DEVBOX_IMPORT_CONSTANTS } from '@/utils/devboxImportHelper';
+import { normalizeStartupCommand } from '@/utils/importCommandGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +57,7 @@ async function uploadFileToDevbox(
   fileBuffer: Buffer,
   destPath: string = '/tmp/upload.tar'
 ): Promise<void> {
-  const pass = new PassThrough();
+  const pass = new PassThrough({ highWaterMark: 64 * 1024 });
 
   const uploadPromise = kubefs.upload({
     namespace,
@@ -65,9 +67,28 @@ async function uploadFileToDevbox(
     file: pass
   });
 
-  pass.end(fileBuffer);
+  const CHUNK_SIZE = 64 * 1024;
+  for (let offset = 0; offset < fileBuffer.length; offset += CHUNK_SIZE) {
+    const chunk = fileBuffer.subarray(offset, Math.min(offset + CHUNK_SIZE, fileBuffer.length));
+    if (!pass.write(chunk)) {
+      await once(pass, 'drain');
+    }
+  }
+  pass.end();
 
   await uploadPromise;
+
+  const remoteSizeOutput = await kubefs.execCommand(namespace, podName, containerName, [
+    '/bin/sh',
+    '-c',
+    `wc -c < "${destPath}"`
+  ]);
+  const remoteSize = Number(remoteSizeOutput.trim());
+  if (!Number.isFinite(remoteSize) || remoteSize !== fileBuffer.length) {
+    throw new Error(
+      `Uploaded file size mismatch: local=${fileBuffer.length}, remote=${remoteSizeOutput.trim() || 'unknown'}`
+    );
+  }
   console.log(`File uploaded successfully to ${destPath}`);
 }
 
@@ -319,6 +340,9 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('Creating entrypoint.sh...');
+    const normalizedStartupCommand = normalizeStartupCommand(
+      startupCommand || 'echo "No startup command specified"'
+    );
     const createEntrypointCommand = `
 set -e
 cd /home/devbox/project
@@ -326,7 +350,7 @@ cat > /home/devbox/project/entrypoint.sh << 'ENTRYPOINT_EOF'
 #!/bin/bash
 set -e
 cd /home/devbox/project
-${startupCommand || 'echo "No startup command specified"'}
+${normalizedStartupCommand}
 ENTRYPOINT_EOF
 chown devbox:devbox /home/devbox/project/entrypoint.sh
 chmod +x /home/devbox/project/entrypoint.sh

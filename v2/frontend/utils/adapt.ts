@@ -22,7 +22,13 @@ import { V1Deployment, V1Ingress, V1Pod, V1StatefulSet } from '@kubernetes/clien
 
 import { KBDevboxReleaseType, KBDevboxTypeV2 } from '@/types/k8s';
 import { calculateUptime, formatPodTime } from '@/utils/tools';
-import { devboxRemarkKey, gpuNodeSelectorKey, gpuResourceKey } from '../constants/devbox';
+import type { GpuAliasMap } from '@/types/gpu';
+import {
+  devboxRemarkKey,
+  gpuNodeSelectorKey,
+  gpuResourceKey,
+  gpuTypeAnnotationKey
+} from '../constants/devbox';
 import { cpuFormatToM, memoryFormatToMi } from '@labring/sealos-shared-sdk';
 
 const storageLimitOptions = ['10Gi', '20Gi', '30Gi', '40Gi', '50Gi'];
@@ -43,18 +49,78 @@ const getDevboxStatus = (phase?: string) => {
   return devboxStatusMap[phase as DevboxStatusEnum] || devboxStatusMap.Error;
 };
 
-export const adaptDevboxListItemV2 = ([devbox, template]: [
-  KBDevboxTypeV2,
-  {
-    templateRepository: {
-      iconId: string | null;
-    };
-    uid: string;
-    name: string;
+const getGpuResourceInfo = (
+  resource: Record<string, any> | undefined,
+  gpuType?: string,
+  gpuAliasMap?: GpuAliasMap
+) => {
+  if (!resource || !gpuType) {
+    return { amount: 0, resource: undefined };
   }
-]): DevboxListItemTypeV2 => {
-  const gpuType = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
-  const gpuAmount = devbox.spec.resource[gpuResourceKey];
+
+  const matchedAlias = Object.entries(gpuAliasMap || {}).find(
+    ([key, alias]) => key === gpuType || alias?.default === gpuType
+  )?.[1];
+  const resourceKey =
+    matchedAlias?.resource?.card || (resource[gpuResourceKey] ? gpuResourceKey : undefined);
+  const amount = resourceKey ? Number(resource?.[resourceKey] || 0) : 0;
+
+  return {
+    amount,
+    resource: matchedAlias?.resource || (resourceKey ? { card: resourceKey } : undefined)
+  };
+};
+
+const resolveGpuAlias = (gpuType?: string, gpuAliasMap?: GpuAliasMap) => {
+  if (!gpuType || !gpuAliasMap) return undefined;
+
+  return Object.entries(gpuAliasMap).find(
+    ([key, alias]) => key === gpuType || alias?.default === gpuType
+  )?.[1];
+};
+
+const resolveGpuType = (
+  gpuAnnotation?: string,
+  gpuProduct?: string,
+  gpuAliasMap?: GpuAliasMap
+) => {
+  if (gpuAnnotation) return gpuAnnotation;
+  if (!gpuProduct) return undefined;
+
+  return resolveGpuAlias(gpuProduct, gpuAliasMap)?.default || gpuProduct;
+};
+
+const resolveGpuProduct = (
+  gpuType?: string,
+  gpuProduct?: string,
+  gpuAliasMap?: GpuAliasMap
+) => {
+  if (gpuProduct) return gpuProduct;
+  return resolveGpuAlias(gpuType, gpuAliasMap)?.product;
+};
+
+export const adaptDevboxListItemV2 = (
+  [devbox, template]: [
+    KBDevboxTypeV2,
+    {
+      templateRepository: {
+        iconId: string | null;
+      };
+      uid: string;
+      name: string;
+    }
+  ],
+  gpuAliasMap?: GpuAliasMap
+): DevboxListItemTypeV2 => {
+  const rawGpuProduct = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
+  const gpuAnnotation = devbox.spec.config?.annotations?.[gpuTypeAnnotationKey];
+  const gpuType = resolveGpuType(gpuAnnotation, rawGpuProduct, gpuAliasMap);
+  const gpuProduct = resolveGpuProduct(gpuType, rawGpuProduct, gpuAliasMap);
+  const { amount: gpuAmount, resource: gpuResource } = getGpuResourceInfo(
+    devbox.spec.resource as Record<string, any>,
+    gpuType,
+    gpuAliasMap
+  );
   const state = getDevboxState(devbox);
 
   return {
@@ -69,25 +135,23 @@ export const adaptDevboxListItemV2 = ([devbox, template]: [
     createTime: devbox.metadata.creationTimestamp,
     cpu: cpuFormatToM(devbox.spec.resource.cpu),
     memory: memoryFormatToMi(devbox.spec.resource.memory),
-    gpu:
-      gpuType || gpuAmount
-        ? {
-            type: gpuType || '',
-            amount: Number(gpuAmount || 0),
-            manufacturers: 'nvidia'
-          }
-        : undefined,
+    gpu: gpuType
+      ? {
+          type: gpuType,
+          product: gpuProduct,
+          amount: Number(gpuAmount || 0),
+          manufacturers: 'nvidia',
+          resource: gpuResource
+        }
+      : undefined,
     networkType: devbox.spec.network.type
   };
 };
 
-export const adaptDevboxDetailV2 = ([
-  devbox,
-  portInfos,
-  template,
-  k8sConfigMaps,
-  k8sPvcs
-]: GetDevboxByNameReturn): DevboxDetailTypeV2 => {
+export const adaptDevboxDetailV2 = (
+  [devbox, portInfos, template, k8sConfigMaps, k8sPvcs]: GetDevboxByNameReturn,
+  gpuAliasMap?: GpuAliasMap
+): DevboxDetailTypeV2 => {
   const status =
     devbox.status?.phase && devboxStatusMap[devbox.status.phase]
       ? devboxStatusMap[devbox.status.phase]
@@ -173,11 +237,28 @@ export const adaptDevboxDetailV2 = ([
     storageLimit: normalizeStorageLimit(
       devbox.spec.storageLimit || devbox.spec.resource['ephemeral-storage']
     ),
-    gpu: {
-      type: devbox.spec.nodeSelector?.[gpuNodeSelectorKey] || '',
-      amount: Number(devbox.spec.resource[gpuResourceKey] || 0),
-      manufacturers: 'nvidia'
-    },
+    gpu: (() => {
+      const rawGpuProduct = devbox.spec.nodeSelector?.[gpuNodeSelectorKey];
+      const gpuAnnotation = devbox.spec.config?.annotations?.[gpuTypeAnnotationKey];
+      const gpuType = resolveGpuType(gpuAnnotation, rawGpuProduct, gpuAliasMap);
+      const gpuProduct = resolveGpuProduct(gpuType, rawGpuProduct, gpuAliasMap);
+      const { amount: gpuAmount, resource: gpuResource } = getGpuResourceInfo(
+        devbox.spec.resource as Record<string, any>,
+        gpuType,
+        gpuAliasMap
+      );
+      if (!gpuType) {
+        return undefined;
+      }
+
+      return {
+        type: gpuType,
+        product: gpuProduct,
+        amount: Number(gpuAmount || 0),
+        manufacturers: 'nvidia',
+        resource: gpuResource
+      };
+    })(),
     networks: portInfos || [],
     envs,
     configMaps,

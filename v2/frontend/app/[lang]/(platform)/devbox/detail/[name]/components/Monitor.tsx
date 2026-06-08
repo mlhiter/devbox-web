@@ -2,10 +2,12 @@ import dayjs from 'dayjs';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 
 import { useDevboxStore } from '@/stores/devbox';
 import { useDateTimeStore } from '@/stores/date';
 import { parseTimeRange } from '@/utils/timeRange';
+import { DevboxStatusEnum } from '@/constants/devbox';
 
 import DatePicker from '@/components/DatePicker';
 import MonitorChart from '@/components/MonitorChart';
@@ -18,6 +20,7 @@ const Monitor = () => {
   const { startDateTime, endDateTime, setStartDateTime, setEndDateTime } = useDateTimeStore();
   const { devboxDetail, loadDetailMonitorData } = useDevboxStore();
   const [isTimeInitialized, setIsTimeInitialized] = useState(false);
+  const isRunning = devboxDetail?.status.value === DevboxStatusEnum.Running;
 
   useEffect(() => {
     const allTimeStartDate = new Date('1970-01-01T00:00:00Z');
@@ -39,16 +42,21 @@ const Monitor = () => {
 
   const handleRefresh = useCallback(async () => {
     if (!params?.name) return;
+    if (!isRunning) {
+      toast.warning(t('refresh_requires_running'));
+      return;
+    }
     await loadDetailMonitorData(
       params.name as string,
       startDateTime.getTime(),
       endDateTime.getTime()
     );
-  }, [params?.name, startDateTime, endDateTime, loadDetailMonitorData]);
+  }, [params?.name, isRunning, t, startDateTime, endDateTime, loadDetailMonitorData]);
 
   useEffect(() => {
+    if (!isRunning) return;
     handleRefresh();
-  }, [handleRefresh]);
+  }, [isRunning, handleRefresh]);
 
   return (
     <div className="flex h-full flex-1 flex-col items-start gap-2">
@@ -56,8 +64,8 @@ const Monitor = () => {
       <div className="flex w-full items-center justify-between rounded-xl border-[0.5px] bg-white p-6 shadow-xs">
         <div className="flex items-center gap-4">
           <span className="text-lg/7 font-medium">{t('filter')}</span>
-          {isTimeInitialized && <DatePicker onClose={handleRefresh} />}
-          <RefreshButton onRefresh={handleRefresh} />
+          {isTimeInitialized && <DatePicker onClose={handleRefresh} showAllTime={false} />}
+          <RefreshButton onRefresh={handleRefresh} autoRefreshEnabled={isRunning} />
         </div>
         <span className="text-sm/5 text-neutral-500">
           {t('update Time')}&ensp;

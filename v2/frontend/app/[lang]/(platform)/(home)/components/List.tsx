@@ -15,7 +15,7 @@ import {
 } from '@tanstack/react-table';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
-import { useCallback, useMemo, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 
 import { useRouter } from '@/i18n';
 import { useDateTimeStore } from '@/stores/date';
@@ -91,7 +91,8 @@ const DevboxList = ({
     handleStartDevbox,
     handleGoToTerminal,
     errorModalState,
-    closeErrorModal
+    closeErrorModal,
+    RestartConfirmChild
   } = useControlDevbox(refetchDevboxList);
 
   const { startDateTime: dateRangeStart } = useDateTimeStore();
@@ -290,6 +291,25 @@ const DevboxList = ({
     autoResetPageIndex: false
   });
 
+  const filterSnapshot = useMemo(
+    () =>
+      [
+        searchQuery.toLowerCase(),
+        [...statusFilter].sort().join(','),
+        startDateTime.getTime(),
+        endDateTime.getTime()
+      ].join('|'),
+    [searchQuery, statusFilter, startDateTime, endDateTime]
+  );
+  const previousFilterSnapshotRef = useRef(filterSnapshot);
+
+  useEffect(() => {
+    if (previousFilterSnapshotRef.current !== filterSnapshot) {
+      table.setPageIndex(0);
+      previousFilterSnapshotRef.current = filterSnapshot;
+    }
+  }, [filterSnapshot, table]);
+
   return (
     <>
       {/* table */}
@@ -420,6 +440,7 @@ const DevboxList = ({
         errorCode={errorModalState.errorCode}
         errorMessage={errorModalState.errorMessage}
       />
+      <RestartConfirmChild />
     </>
   );
 };

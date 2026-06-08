@@ -54,6 +54,7 @@ import CreateTemplateDrawer from '@/components/drawers/CreateTemplateDrawer';
 import CreateOrUpdateDrawer from '@/components/drawers/CreateOrUpdateDrawer';
 import UpdateTemplateDrawer from '@/components/drawers/UpdateTemplateDrawer';
 import DeployDevboxDrawer from '@/components/drawers/DeployDevboxDrawer';
+import { sanitizeTemplateDefaults } from '@/utils/templateConfig';
 
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz', 6);
 
@@ -115,6 +116,14 @@ const Release = () => {
   );
   const templateRepositoryList =
     listPrivateTemplateRepositoryQuery.data?.templateRepositoryList || [];
+  const initialTemplateDefaults = useMemo(
+    () =>
+      sanitizeTemplateDefaults({
+        envs: devbox?.envs,
+        configMaps: devbox?.configMaps
+      }),
+    [devbox?.configMaps, devbox?.envs]
+  );
 
   const handleDeploy = useCallback(
     async (version: DevboxVersionListItemType) => {
@@ -450,6 +459,7 @@ const Release = () => {
         isOpen={isCreateTemplateDrawerOpen}
         onClose={() => setIsCreateTemplateDrawerOpen(false)}
         devboxReleaseName={currentVersion?.name || ''}
+        initialTemplateDefaults={initialTemplateDefaults}
       />
       {templateRepositoryList.length > 0 && (
         <CreateOrUpdateDrawer
@@ -470,6 +480,7 @@ const Release = () => {
           isOpen={isUpdateTemplateDrawerOpen}
           onClose={() => setIsUpdateTemplateDrawerOpen(false)}
           devboxReleaseName={currentVersion?.name || ''}
+          initialTemplateDefaults={initialTemplateDefaults}
         />
       )}
     </div>

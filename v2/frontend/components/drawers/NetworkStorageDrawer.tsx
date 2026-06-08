@@ -13,20 +13,27 @@ import {
 import { Input } from '@labring/sealos-ui/input';
 import { Button } from '@labring/sealos-ui/button';
 import { Label } from '@labring/sealos-ui/label';
+import { validateMountPath } from '@/utils/mountPath';
 
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz', 6);
 
 interface NetworkStorageDrawerProps {
+  isEdit: boolean;
+  maxCapacity?: number;
   onClose: () => void;
   onSuccess: (storage: { id?: string; path: string; size: number }) => void;
   initialValue?: { id?: string; path: string; size: number };
+  originalValue?: { id?: string; path: string; size: number };
   existingPaths?: string[];
 }
 
 const NetworkStorageDrawer = ({
+  isEdit,
+  maxCapacity = 30,
   onClose,
   onSuccess,
   initialValue,
+  originalValue,
   existingPaths = []
 }: NetworkStorageDrawerProps) => {
   const t = useTranslations();
@@ -35,55 +42,67 @@ const NetworkStorageDrawer = ({
   const [capacityInput, setCapacityInput] = useState((initialValue?.size || 1).toString());
   const [pathError, setPathError] = useState<string>('');
 
+  const minCapacity = isEdit && originalValue ? originalValue.size : 1;
+  const parsedMaxCapacity = Number(maxCapacity);
+  const configuredMaxCapacity =
+    Number.isFinite(parsedMaxCapacity) && parsedMaxCapacity >= 1
+      ? Math.floor(parsedMaxCapacity)
+      : 20;
+  const maxCapacityLimit = Math.max(minCapacity, configuredMaxCapacity);
+
   const handleCapacityChange = (delta: number) => {
-    const newValue = Math.min(20, Math.max(1, capacity + delta));
+    const newValue = Math.min(maxCapacityLimit, Math.max(minCapacity, capacity + delta));
     setCapacity(newValue);
     setCapacityInput(newValue.toString());
   };
 
   const handleCapacityInput = (value: string) => {
     setCapacityInput(value);
-    const num = parseInt(value);
+    const num = parseInt(value, 10);
     if (!isNaN(num)) {
-      setCapacity(Math.min(20, Math.max(1, num)));
+      setCapacity(Math.min(maxCapacityLimit, Math.max(minCapacity, num)));
     }
   };
 
   const handleCapacityBlur = () => {
-    if (capacityInput === '' || isNaN(parseInt(capacityInput))) {
+    if (capacityInput === '' || isNaN(parseInt(capacityInput, 10))) {
       setCapacityInput(capacity.toString());
     } else {
-      const num = Math.min(20, Math.max(1, parseInt(capacityInput)));
+      const num = Math.min(maxCapacityLimit, Math.max(minCapacity, parseInt(capacityInput, 10)));
       setCapacity(num);
       setCapacityInput(num.toString());
     }
   };
 
-  const validatePath = (path: string): string => {
-    if (!path.trim()) {
-      return t('mount_path_cannot_be_empty');
+  const validatePath = (rawPath: string): { error: string; normalizedPath: string } => {
+    const { normalizedPath, error } = validateMountPath(rawPath);
+
+    if (error === 'empty') {
+      return { normalizedPath, error: t('mount_path_cannot_be_empty') };
     }
 
-    if (!path.startsWith('/')) {
-      return t('path_must_be_absolute');
+    if (error === 'not_absolute') {
+      return { normalizedPath, error: t('path_must_be_absolute') };
     }
 
-    const pathPattern = /^[0-9a-zA-Z_/][0-9a-zA-Z_/.-]*[0-9a-zA-Z_/]$/;
-    if (!pathPattern.test(path)) {
-      return t('mount_path_invalid_format');
+    if (error === 'invalid_format') {
+      return { normalizedPath, error: t('mount_path_invalid_format') };
     }
 
-    if (existingPaths.includes(path.toLowerCase())) {
-      return t('mount_path_conflict');
+    if (error === 'protected_path') {
+      return { normalizedPath, error: t('mount_path_protected') };
     }
 
-    return '';
+    if (existingPaths.includes(normalizedPath.toLowerCase())) {
+      return { normalizedPath, error: t('mount_path_conflict') };
+    }
+
+    return { normalizedPath, error: '' };
   };
 
   const handleConfirm = () => {
-    const path = pathRef.current?.value || '';
-
-    const error = validatePath(path);
+    const rawPath = pathRef.current?.value || '';
+    const { normalizedPath, error } = validatePath(rawPath);
     if (error) {
       setPathError(error);
       return;
@@ -92,7 +111,7 @@ const NetworkStorageDrawer = ({
     setPathError('');
     onSuccess({
       id: initialValue?.id || nanoid(),
-      path,
+      path: normalizedPath,
       size: capacity
     });
     onClose();
@@ -120,8 +139,8 @@ const NetworkStorageDrawer = ({
                 </Button>
                 <Input
                   type="number"
-                  min={1}
-                  max={20}
+                  min={minCapacity}
+                  max={maxCapacityLimit}
                   value={capacityInput}
                   onChange={(e) => handleCapacityInput(e.target.value)}
                   onBlur={handleCapacityBlur}

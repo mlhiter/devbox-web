@@ -4,6 +4,7 @@ import { CoreV1Api } from '@kubernetes/client-node';
 import { jsonRes } from '@/services/backend/response';
 import { userPriceType } from '@/types/user';
 import { K8sApiDefault } from '@/services/backend/kubernetes';
+import type { GpuAliasMap, GpuAliasName } from '@/types/gpu';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +35,22 @@ type GpuNodeType = {
   'gpu.used': number;
   'gpu.memory': number;
   'gpu.product': string;
-  'gpu.alias': string;
+  'gpu.ref'?: string;
+  'gpu.annotationType'?: string;
+  'gpu.icon'?: string;
+  'gpu.name'?: GpuAliasName;
+  'gpu.resource'?: Record<string, string>;
+  'gpu.nodes'?: string[];
+};
+
+type GpuConfigMapItem = {
+  'gpu.count': string;
+  'gpu.available': string;
+  'gpu.used': string;
+  'gpu.memory': string;
+  'gpu.product': string;
+  'gpu.devbox': string;
+  'gpu.ref'?: string;
 };
 
 const PRICE_SCALE = 1000000;
@@ -73,6 +89,7 @@ export async function GET(req: NextRequest) {
     const data: userPriceType = {
       cpu: countSourcePrice(priceResponse, 'cpu'),
       memory: countSourcePrice(priceResponse, 'memory'),
+      storage: countSourcePrice(priceResponse, 'storage'),
       gpu: GPU_ENABLE === 'true' ? countGpuSource(priceResponse, gpuNodes) : undefined
     };
 
@@ -124,42 +141,40 @@ async function getGpuNode() {
     const gpuMap = configMap.data?.gpu;
 
     if (!gpuMap || !configMap.data?.alias) return [];
-    const alias = (JSON.parse(configMap.data.alias) || {}) as Record<string, string>;
+    const alias = (JSON.parse(configMap.data.alias) || {}) as GpuAliasMap;
+    const aliasBackupRaw = configMap.data['alias-backup'];
+    const aliasBackup = aliasBackupRaw
+      ? (JSON.parse(aliasBackupRaw) as Record<string, string>)
+      : undefined;
 
-    const parseGpuMap = JSON.parse(gpuMap) as Record<
-      string,
-      {
-        'gpu.count': string;
-        'gpu.available': string;
-        'gpu.used': string;
-        'gpu.memory': string;
-        'gpu.product': string;
-        'gpu.devbox': string;
-      }
-    >;
-    const gpuValues = Object.values(parseGpuMap).filter(
-      (item) => item['gpu.product'] && item['gpu.devbox'] === 'true'
+    const parseGpuMap = JSON.parse(gpuMap) as Record<string, GpuConfigMapItem>;
+    const gpuEntries = Object.entries(parseGpuMap).filter(
+      ([, item]) => item['gpu.product'] && item['gpu.devbox'] === 'true'
     );
 
-    const gpuList: GpuNodeType[] = [];
+    const gpuList: GpuNodeType[] = gpuEntries.map(([nodeName, item]) => {
+      const fallbackRef =
+        item['gpu.product'] && aliasBackup
+          ? aliasBackup[item['gpu.product']] ||
+            aliasBackup[item['gpu.product'].replace(/\s+/g, '-')]
+          : undefined;
+      const ref = item['gpu.ref'] || fallbackRef;
+      const aliasItem = (ref && alias[ref]) || alias[item['gpu.product']];
+      const annotationType = aliasItem?.default || item['gpu.product'] || ref;
 
-    // merge same type gpu
-    gpuValues.forEach((item) => {
-      const index = gpuList.findIndex((gpu) => gpu['gpu.product'] === item['gpu.product']);
-      if (index > -1) {
-        gpuList[index]['gpu.count'] += Number(item['gpu.count']);
-        gpuList[index]['gpu.available'] += Number(item['gpu.available']);
-        gpuList[index]['gpu.used'] += Number(item['gpu.used']);
-      } else {
-        gpuList.push({
-          ['gpu.count']: +item['gpu.count'],
-          ['gpu.available']: +item['gpu.available'],
-          ['gpu.used']: +item['gpu.used'],
-          ['gpu.memory']: +item['gpu.memory'],
-          ['gpu.product']: item['gpu.product'],
-          ['gpu.alias']: alias[item['gpu.product']] || item['gpu.product']
-        });
-      }
+      return {
+        ['gpu.count']: +item['gpu.count'],
+        ['gpu.available']: +item['gpu.available'],
+        ['gpu.used']: +item['gpu.used'],
+        ['gpu.memory']: +item['gpu.memory'],
+        ['gpu.product']: item['gpu.product'],
+        ['gpu.ref']: ref,
+        ['gpu.annotationType']: annotationType,
+        ['gpu.icon']: aliasItem?.icon,
+        ['gpu.name']: aliasItem?.name,
+        ['gpu.resource']: aliasItem?.resource,
+        ['gpu.nodes']: [nodeName]
+      };
     });
 
     return gpuList;
@@ -169,23 +184,37 @@ async function getGpuNode() {
   }
 }
 
+const normalizeGpuKey = (value?: string) =>
+  value ? value.trim().replace(/\s+/g, '-').toLowerCase() : '';
+
 function countGpuSource(rawData: ResourcePriceType['data']['properties'], gpuNodes: GpuNodeType[]) {
   const gpuList: userPriceType['gpu'] = [];
+  const gpuPriceMap = (rawData || [])
+    .filter((item) => item.name.startsWith('gpu'))
+    .map((item) => ({
+      ...item,
+      normalizedType: normalizeGpuKey(item.name.replace('gpu-', ''))
+    }));
 
   // count gpu price by gpuNode and accountPriceConfig
-  rawData?.forEach((item) => {
-    if (!item.name.startsWith('gpu')) return;
-    const gpuType = item.name.replace('gpu-', '');
-    const gpuNode = gpuNodes.find((item) => item['gpu.product'] === gpuType);
-    if (!gpuNode) return;
+  gpuNodes.forEach((gpuNode) => {
+    const matchedPrice = gpuPriceMap.find((item) => {
+      const keys = [gpuNode['gpu.ref'], gpuNode['gpu.product'], gpuNode['gpu.annotationType']];
+      return keys.some((key) => normalizeGpuKey(key) === item.normalizedType);
+    });
+    if (!matchedPrice) return;
 
     gpuList.push({
-      alias: gpuNode['gpu.alias'],
-      type: gpuNode['gpu.product'],
-      price: (item.unit_price * valuationMap.gpu) / PRICE_SCALE,
+      annotationType: gpuNode['gpu.annotationType'] || '',
+      product: gpuNode['gpu.product'],
+      price: (matchedPrice.unit_price * valuationMap.gpu) / PRICE_SCALE,
       available: +gpuNode['gpu.available'],
       count: +gpuNode['gpu.count'],
-      vm: +gpuNode['gpu.memory'] / 1024
+      vm: +gpuNode['gpu.memory'] / 1024,
+      icon: gpuNode['gpu.icon'],
+      name: gpuNode['gpu.name'],
+      resource: gpuNode['gpu.resource'],
+      nodes: gpuNode['gpu.nodes']
     });
   });
 

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { CurrencySymbol } from '@labring/sealos-ui';
 import { useTranslations } from 'next-intl';
-import { CircuitBoard, Cpu, MemoryStick } from 'lucide-react';
+import { CircuitBoard, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 
 import { cn } from '@labring/sealos-ui';
 import { useEnvStore } from '@/stores/env';
@@ -11,15 +11,18 @@ import { Card, CardContent, CardHeader } from '@labring/sealos-ui/card';
 
 export const colorMap = {
   cpu: '#33BABB',
-  memory: '#36ADEF'
+  memory: '#36ADEF',
+  storage: '#6BCB77'
 };
 
 interface PriceBoxProps {
   components: {
     cpu: number;
     memory: number;
+    pvcStorage?: number;
     gpu?: {
       type: string;
+      product?: string;
       amount: number;
     };
   }[];
@@ -38,21 +41,27 @@ const PriceBox = ({ components = [], className }: PriceBoxProps) => {
   }[] = useMemo(() => {
     let cp = 0;
     let mp = 0;
+    let sp = 0;
     let tp = 0;
     let gp = 0;
 
-    components.forEach(({ cpu, memory, gpu }) => {
+    components.forEach(({ cpu, memory, pvcStorage, gpu }) => {
       cp = (sourcePrice.cpu * cpu * 24) / 1000;
       mp = (sourcePrice.memory * memory * 24) / 1024;
+      sp = (sourcePrice.storage || 0) * (pvcStorage || 0) * 24;
 
       gp = (() => {
         if (!gpu || !gpu.amount) return 0;
-        const item = sourcePrice?.gpu?.find((item) => item.type === gpu.type);
+        const item = sourcePrice?.gpu?.find(
+          (item) =>
+            item.annotationType === gpu.type &&
+            (!gpu.product || !item.product || item.product === gpu.product)
+        );
         if (!item) return 0;
         return +(item.price * gpu.amount * 24);
       })();
 
-      tp = cp + mp + gp;
+      tp = cp + mp + sp + gp;
     });
     const iconClassName = 'h-5 w-5 text-neutral-400';
 
@@ -68,6 +77,11 @@ const PriceBox = ({ components = [], className }: PriceBoxProps) => {
         color: '#36ADEF',
         value: mp.toFixed(2)
       },
+      {
+        icon: <HardDrive className={iconClassName} />,
+        label: 'storage',
+        value: sp.toFixed(2)
+      },
       ...(sourcePrice?.gpu
         ? [
             {
@@ -79,7 +93,7 @@ const PriceBox = ({ components = [], className }: PriceBoxProps) => {
         : []),
       { label: 'total_price', value: tp.toFixed(2) }
     ];
-  }, [components, sourcePrice.cpu, sourcePrice.memory, sourcePrice.gpu]);
+  }, [components, sourcePrice.cpu, sourcePrice.memory, sourcePrice.storage, sourcePrice.gpu]);
 
   return (
     <Card className={cn('guide-cost', className)}>
