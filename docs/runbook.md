@@ -41,16 +41,23 @@ Common v2 frontend settings include:
 - `SEALOS_DOMAIN`
 - `SSH_DOMAIN`
 - `ACCOUNT_URL`
-- `METRICS_URL`
+- `METRICS_URL`; the metrics SDK expects a Prometheus-compatible query endpoint, for example the VictoriaMetrics select service at `http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus`
 - `DATABASE_URL`
 - `REGISTRY_ADDR`, `REGISTRY_USER`, `REGISTRY_PASSWORD`
 - `GPU_ENABLE`
 - `GPU_SCHEDULER_MODE`, with `native` and `hami` supported
 - `ENABLED_IDES`
-- `ENABLE_ADVANCED_CONFIG`
+- `ENABLE_ADVANCED_CONFIG`; set it to `true` to show advanced env and ConfigMap editing in the frontend
 - `STORAGE_LIMIT`
+- `APP_LAUNCHPAD_URL`
+- `DEVBOX_DOMAIN_CHALLENGE_SECRET`
 
 Registry retagging requires HTTPS registry access from the frontend route handlers.
+
+For cluster-local deployments, keep credentials such as `REGISTRY_USER`,
+`REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET` in a Secret and mount
+them through `envFrom` rather than storing them directly in the Deployment
+manifest.
 
 ## Controller and Services
 
@@ -86,5 +93,6 @@ make build
 
 - GPU inventory missing: check `GPU_ENABLE`, `GPU_SCHEDULER_MODE`, and the `node-system/node-gpu-info` ConfigMap.
 - Quota errors look like permissions errors: inspect `services/backend/response.ts` mapping and the raw Kubernetes status message.
+- Advanced env or ConfigMap UI missing: check `/api/getEnv` and confirm `enableAdvancedConfig` is `true`, then verify the Deployment has `ENABLE_ADVANCED_CONFIG=true`.
 - ConfigMap edits do not appear in the workspace: restart the DevBox after update.
 - IDE options missing: check `ENABLED_IDES` and `components/IDEButton.tsx` grouping/filtering.

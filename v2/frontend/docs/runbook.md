@@ -21,6 +21,10 @@ REGISTRY_PASSWORD='<registry password>'
 JWT_SECRET='<desktop jwt secret>'
 REGION_UID='<region uid>'
 DATABASE_URL='<template database url>'
+METRICS_URL='http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus'
+STORAGE_LIMIT='20Gi'
+APP_LAUNCHPAD_URL='http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha'
+ENABLE_ADVANCED_CONFIG='true'
 ```
 
 Do not commit real `.env.*.local` secrets.
@@ -72,3 +76,18 @@ kubectl -n devbox-frontend get deploy devbox-frontend \
   -o jsonpath='{.spec.template.spec.initContainers[*].image}{"\n"}{.spec.template.spec.containers[*].image}{"\n"}'
 curl -k -I https://devbox.192.168.10.70.nip.io
 ```
+
+Cluster 70 currently keeps runtime secrets in `devbox-frontend-runtime`. The
+Deployment should load it through `envFrom`, with at least
+`REGISTRY_USER`, `REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET`.
+
+The advanced env and ConfigMap editor is gated by `ENABLE_ADVANCED_CONFIG`.
+When the UI does not show those sections, confirm the live frontend env route:
+
+```bash
+curl -k https://devbox.192.168.10.70.nip.io/api/getEnv
+```
+
+The response should include `"enableAdvancedConfig":"true"`. Metrics should use
+the VictoriaMetrics select endpoint through `METRICS_URL`; pointing it at the
+legacy monitor service can return `Not found` for SDK queries.
