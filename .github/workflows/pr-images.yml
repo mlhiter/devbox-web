@@ -19,7 +19,7 @@ concurrency:
 env:
   LOCAL_REGISTRY: 127.0.0.1:5000/devbox-pr
   LOCAL_SEALOS_IMAGE: devbox-v1-cluster-pr
-  LOCAL_V2_FRONTEND_SEALOS_IMAGE: devbox-v2-frontend-cluster-pr
+  LOCAL_V2_SEALOS_IMAGE: devbox-v2-cluster-pr
 
 jobs:
   v1-runtime-images:
@@ -199,8 +199,8 @@ jobs:
         if: always()
         run: docker rm -f devbox-pr-registry >/dev/null 2>&1 || true
 
-  v2-frontend-cluster-image:
-    name: Build / v2-frontend-cluster / ${{ matrix.arch }}
+  v2-cluster-image:
+    name: Build / v2-cluster / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -225,6 +225,18 @@ jobs:
           PR_TAG="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
           echo "pr_tag=${PR_TAG}" >> "${GITHUB_OUTPUT}"
 
+      - name: Build controller image
+        uses: docker/build-push-action@v6
+        with:
+          context: v2/controller
+          file: v2/controller/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v2-controller:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-controller-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-controller-${{ matrix.arch }}
+
       - name: Build frontend image
         uses: docker/build-push-action@v6
         with:
@@ -237,44 +249,77 @@ jobs:
           cache-from: type=gha,scope=pr-devbox-v2-frontend-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=pr-devbox-v2-frontend-${{ matrix.arch }}
 
+      - name: Build httpgate image
+        uses: docker/build-push-action@v6
+        with:
+          context: v2/httpgate
+          file: v2/httpgate/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v2-httpgate:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-httpgate-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-httpgate-${{ matrix.arch }}
+
+      - name: Build sshgate image
+        uses: docker/build-push-action@v6
+        with:
+          context: v2/sshgate
+          file: v2/sshgate/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v2-sshgate:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-sshgate-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-sshgate-${{ matrix.arch }}
+
       - name: Start temporary local registry
         run: |
           set -euo pipefail
-          docker rm -f devbox-v2-frontend-pr-registry >/dev/null 2>&1 || true
-          docker run -d -p 5000:5000 --name devbox-v2-frontend-pr-registry registry:2
+          docker rm -f devbox-v2-pr-registry >/dev/null 2>&1 || true
+          docker run -d -p 5000:5000 --name devbox-v2-pr-registry registry:2
 
-      - name: Push runtime image to temporary local registry
+      - name: Push runtime images to temporary local registry
         run: |
           set -euo pipefail
           PR_TAG="${{ steps.meta.outputs.pr_tag }}"
+          docker tag "devbox-v2-controller:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v2-controller:${PR_TAG}"
           docker tag "devbox-v2-frontend:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}"
+          docker tag "devbox-v2-httpgate:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v2-httpgate:${PR_TAG}"
+          docker tag "devbox-v2-sshgate:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v2-sshgate:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v2-controller:${PR_TAG}"
           docker push "${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v2-httpgate:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v2-sshgate:${PR_TAG}"
 
       - name: Install sealos
         run: sudo bash ./.github/scripts/install-sealos.sh
 
-      - name: Validate chart and cache images for sealos
-        working-directory: v2/frontend/deploy
+      - name: Validate package and cache images for sealos
+        working-directory: v2/deploy
         run: |
           set -euo pipefail
           PR_TAG="${{ steps.meta.outputs.pr_tag }}"
-          sed -i "s#^\([[:space:]]*repository:[[:space:]]*\)ghcr.io/.*/devbox-v2-frontend#\1${LOCAL_REGISTRY}/devbox-v2-frontend#" charts/devbox-v2-frontend/values.yaml
-          sed -i "s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${PR_TAG}#" charts/devbox-v2-frontend/values.yaml
-          make lint
+          CONTROLLER_IMAGE="${LOCAL_REGISTRY}/devbox-v2-controller:${PR_TAG}" \
+            FRONTEND_IMAGE="${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}" \
+            HTTPGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-httpgate:${PR_TAG}" \
+            SSHGATE_IMAGE="${LOCAL_REGISTRY}/devbox-v2-sshgate:${PR_TAG}" \
+            ./scripts/prepare-package.sh
+          ./scripts/lint-package.sh
           sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
 
       - name: Build cluster image
         uses: docker/build-push-action@v6
         with:
-          context: v2/frontend/deploy
-          file: v2/frontend/deploy/Kubefile
+          context: v2/deploy
+          file: v2/deploy/Kubefile
           platforms: linux/${{ matrix.arch }}
           push: false
           load: true
-          tags: ${{ env.LOCAL_V2_FRONTEND_SEALOS_IMAGE }}:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
-          cache-from: type=gha,scope=pr-devbox-v2-frontend-cluster-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=pr-devbox-v2-frontend-cluster-${{ matrix.arch }}
+          tags: ${{ env.LOCAL_V2_SEALOS_IMAGE }}:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-cluster-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-cluster-${{ matrix.arch }}
 
       - name: Cleanup temporary local registry
         if: always()
-        run: docker rm -f devbox-v2-frontend-pr-registry >/dev/null 2>&1 || true
+        run: docker rm -f devbox-v2-pr-registry >/dev/null 2>&1 || true

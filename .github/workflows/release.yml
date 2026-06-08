@@ -436,8 +436,8 @@ jobs:
             "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest-arm64"
           docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v1-cluster:latest"
 
-  v2-frontend-cluster-image:
-    name: Release Image / v2-frontend-cluster / ${{ matrix.arch }}
+  v2-cluster-image:
+    name: Release Image / v2-cluster / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     needs:
       - v2-image-manifests
@@ -464,19 +464,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache images for sealos
-        working-directory: v2/frontend/deploy
+        working-directory: v2/deploy
         run: |
           set -euo pipefail
           sudo sealos login -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}" ghcr.io
-          sed -i "s#^\([[:space:]]*repository:[[:space:]]*\)ghcr.io/.*/devbox-v2-frontend#\1${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend#" charts/devbox-v2-frontend/values.yaml
-          sed -i "s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${GITHUB_REF_NAME}#" charts/devbox-v2-frontend/values.yaml
-          make lint
+          CONTROLLER_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-controller:${GITHUB_REF_NAME}" \
+            FRONTEND_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend:${GITHUB_REF_NAME}" \
+            HTTPGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-httpgate:${GITHUB_REF_NAME}" \
+            SSHGATE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-sshgate:${GITHUB_REF_NAME}" \
+            ./scripts/prepare-package.sh
+          ./scripts/lint-package.sh
           sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
 
       - name: Build and push cluster image
         run: |
           set -euo pipefail
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster"
           TAGS=(
             "${IMAGE}:${GITHUB_REF_NAME}-${{ matrix.arch }}"
             "${IMAGE}:latest-${{ matrix.arch }}"
@@ -484,7 +487,7 @@ jobs:
 
           BUILD_ARGS=(
             --platform "linux/${{ matrix.arch }}"
-            --file v2/frontend/deploy/Kubefile
+            --file v2/deploy/Kubefile
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"
             --label "org.opencontainers.image.revision=${GITHUB_SHA}"
             --label "org.opencontainers.image.version=${GITHUB_REF_NAME}"
@@ -495,7 +498,7 @@ jobs:
             BUILD_ARGS+=(--tag "${tag}")
           done
 
-          docker build "${BUILD_ARGS[@]}" v2/frontend/deploy
+          docker build "${BUILD_ARGS[@]}" v2/deploy
           for tag in "${TAGS[@]}"; do
             docker push "${tag}"
           done
@@ -503,12 +506,12 @@ jobs:
       - name: Save cluster image package
         run: |
           set -euo pipefail
-          SOURCE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}-${{ matrix.arch }}"
-          PACKAGE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}-${{ matrix.arch }}"
+          SOURCE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}-${{ matrix.arch }}"
+          PACKAGE_IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}-${{ matrix.arch }}"
           docker pull "${SOURCE_IMAGE}"
           docker tag "${SOURCE_IMAGE}" "${PACKAGE_IMAGE}"
           mkdir -p release-assets
-          docker save "${PACKAGE_IMAGE}" | gzip > "release-assets/devbox-v2-frontend-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
+          docker save "${PACKAGE_IMAGE}" | gzip > "release-assets/devbox-v2-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
 
       - name: Install OSS tools
         run: |
@@ -528,10 +531,10 @@ jobs:
           : "${OSS_ACCESS_KEY_ID:?OSS_ACCESS_KEY_ID is required}"
           : "${OSS_ACCESS_KEY_SECRET:?OSS_ACCESS_KEY_SECRET is required}"
           : "${OSS_BUCKET:?OSS_BUCKET is required}"
-          TAR_NAME="release-assets/devbox-v2-frontend-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
+          TAR_NAME="release-assets/devbox-v2-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar.gz"
           md5sum "${TAR_NAME}" > "${TAR_NAME}.md5"
           OSS_PREFIX="release/${GITHUB_REF_NAME}"
-          OSS_TAR_NAME="devbox-v2-frontend-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar"
+          OSS_TAR_NAME="devbox-v2-cluster-${GITHUB_REF_NAME}-${{ matrix.arch }}.tar"
           ossutil64 cp -f -e "${OSS_ENDPOINT}" -i "${OSS_ACCESS_KEY_ID}" -k "${OSS_ACCESS_KEY_SECRET}" \
             "${TAR_NAME}" \
             "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}"
@@ -539,11 +542,11 @@ jobs:
             "${TAR_NAME}.md5" \
             "oss://${OSS_BUCKET}/${OSS_PREFIX}/${OSS_TAR_NAME}.md5"
 
-  v2-frontend-cluster-manifest:
-    name: Release Image / v2-frontend-cluster manifest
+  v2-cluster-manifest:
+    name: Release Image / v2-cluster manifest
     runs-on: ubuntu-latest
     needs:
-      - v2-frontend-cluster-image
+      - v2-cluster-image
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -555,15 +558,15 @@ jobs:
       - name: Create multi-arch manifests
         run: |
           set -euo pipefail
-          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}" \
-            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}-amd64" \
-            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}-arm64"
-          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:${GITHUB_REF_NAME}"
+          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}-amd64" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}-arm64"
+          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:${GITHUB_REF_NAME}"
 
-          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:latest" \
-            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:latest-amd64" \
-            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:latest-arm64"
-          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-frontend-cluster:latest"
+          docker manifest create "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:latest" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:latest-amd64" \
+            "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:latest-arm64"
+          docker manifest push "${REGISTRY}/${IMAGE_NAMESPACE}/devbox-v2-cluster:latest"
 
   v1-cri-shim-patch-oss:
     name: OSS / v1-cri-shim-patch / ${{ matrix.arch }}
@@ -809,7 +812,7 @@ jobs:
       - v1-image-manifests
       - v2-image-manifests
       - v1-cluster-manifest
-      - v2-frontend-cluster-manifest
+      - v2-cluster-manifest
       - v1-cri-shim-patch-oss
       - controller-manifests
       - v1-cri-shim-binaries
@@ -845,7 +848,7 @@ jobs:
             - `ghcr.io/${{ github.repository_owner }}/devbox-v1-cri-shim-patch:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-controller:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-frontend:${{ github.ref_name }}`
-            - `ghcr.io/${{ github.repository_owner }}/devbox-v2-frontend-cluster:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/devbox-v2-cluster:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-server:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-httpgate:${{ github.ref_name }}`
             - `ghcr.io/${{ github.repository_owner }}/devbox-v2-sshgate:${{ github.ref_name }}`
@@ -862,7 +865,7 @@ jobs:
 
             - `release/${{ github.ref_name }}/devbox-v1-cluster-${{ github.ref_name }}-amd64.tar`
             - `release/${{ github.ref_name }}/devbox-v1-cluster-${{ github.ref_name }}-arm64.tar`
-            - `release/${{ github.ref_name }}/devbox-v2-frontend-cluster-${{ github.ref_name }}-amd64.tar`
-            - `release/${{ github.ref_name }}/devbox-v2-frontend-cluster-${{ github.ref_name }}-arm64.tar`
+            - `release/${{ github.ref_name }}/devbox-v2-cluster-${{ github.ref_name }}-amd64.tar`
+            - `release/${{ github.ref_name }}/devbox-v2-cluster-${{ github.ref_name }}-arm64.tar`
             - `release/${{ github.ref_name }}/devbox-v1-cri-shim-patch-${{ github.ref_name }}-amd64.tar`
             - `release/${{ github.ref_name }}/devbox-v1-cri-shim-patch-${{ github.ref_name }}-arm64.tar`

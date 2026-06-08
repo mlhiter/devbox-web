@@ -1,7 +1,7 @@
 SEALOS ?= sealos
 DOCKER ?= docker
 ARCH ?= amd64
-IMAGE ?= devbox-v2-frontend-cluster:latest
+IMAGE ?= devbox-v2-frontend-package:latest
 
 .PHONY: all
 all: lint

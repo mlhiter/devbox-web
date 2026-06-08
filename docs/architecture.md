@@ -32,6 +32,17 @@ v2 frontend changes should preserve:
 - `mergeBaseImageTopLayer` handling for create/edit YAML generation.
 - `@labring/sealos-shared-sdk` quota guard behavior in create/edit UI.
 
+## v2 Cluster Package
+
+`v2/deploy` is the aggregated Sealos package entry for v2 components that have
+stable install surfaces. The package prepares a temporary `components/` tree,
+caches runtime images, and installs controller manifests, httpgate, sshgate, and
+frontend in that order.
+
+`v2/server` remains outside the aggregated package for now because
+`v2/server/deploy/devbox-api.yaml` is still an environment-specific manifest
+rather than a stable chart or package entry.
+
 ## GPU Scheduling
 
 GPU frontend logic supports two scheduler modes:

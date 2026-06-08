@@ -89,6 +89,25 @@ go test ./...
 make build
 ```
 
+## Cluster Image Packaging
+
+Validate the aggregated v2 Sealos package locally:
+
+```bash
+CONTROLLER_IMAGE=ghcr.io/sealos-apps/devbox-v2-controller:test \
+FRONTEND_IMAGE=ghcr.io/sealos-apps/devbox-v2-frontend:test \
+HTTPGATE_IMAGE=ghcr.io/sealos-apps/devbox-v2-httpgate:test \
+SSHGATE_IMAGE=ghcr.io/sealos-apps/devbox-v2-sshgate:test \
+  ./v2/deploy/scripts/prepare-package.sh
+./v2/deploy/scripts/lint-package.sh
+```
+
+`prepare-package.sh` creates the ignored `v2/deploy/components/` directory.
+CI runs `sealos registry save --registry-dir=registry_<arch> --arch <arch> .`
+from `v2/deploy`, then builds `v2/deploy/Kubefile` as `devbox-v2-cluster`.
+The package includes controller, frontend, httpgate, and sshgate; server is
+still published as the separate `v2/server` deployment manifest artifact.
+
 ## Troubleshooting
 
 - GPU inventory missing: check `GPU_ENABLE`, `GPU_SCHEDULER_MODE`, and the `node-system/node-gpu-info` ConfigMap.

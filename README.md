@@ -109,6 +109,7 @@ Default image names now follow the new repository naming:
 - `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:latest`
 - `ghcr.io/sealos-apps/devbox-v2-controller:latest`
 - `ghcr.io/sealos-apps/devbox-v2-frontend:latest`
+- `ghcr.io/sealos-apps/devbox-v2-cluster:latest`
 - `ghcr.io/sealos-apps/devbox-v2-server:latest`
 - `ghcr.io/sealos-apps/devbox-v2-httpgate:latest`
 - `ghcr.io/sealos-apps/devbox-v2-sshgate:latest`
@@ -132,7 +133,7 @@ Tagging a release such as `v1.2.3` will publish:
 - `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-controller:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-frontend:v1.2.3`
-- `ghcr.io/sealos-apps/devbox-v2-frontend-cluster:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v2-cluster:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-server:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-httpgate:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-sshgate:v1.2.3`
@@ -145,8 +146,13 @@ The release workflow also uploads controller manifest bundles generated from:
 Large offline image packages are not attached to GitHub Releases. They are uploaded to OSS instead:
 
 - `release/<tag>/devbox-v1-cluster-<tag>-<arch>.tar`
-- `release/<tag>/devbox-v2-frontend-cluster-<tag>-<arch>.tar`
+- `release/<tag>/devbox-v2-cluster-<tag>-<arch>.tar`
 - `release/<tag>/devbox-v1-cri-shim-patch-<tag>-<arch>.tar`
+
+`devbox-v2-cluster` is the aggregated Sealos package for the v2 installable
+components that already have stable package entries: controller, frontend,
+httpgate, and sshgate. `v2/server` is still published as a manifest artifact
+because its deployment file is environment-specific.
 
 If you need to publish manually, you can still run the local make targets:
 

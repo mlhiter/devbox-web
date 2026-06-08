@@ -14,20 +14,21 @@ This repository publishes CI artifacts and container images from `github.com/sea
   - `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch`
   - `ghcr.io/sealos-apps/devbox-v2-controller`
   - `ghcr.io/sealos-apps/devbox-v2-frontend`
-  - `ghcr.io/sealos-apps/devbox-v2-frontend-cluster`
+  - `ghcr.io/sealos-apps/devbox-v2-cluster`
   - `ghcr.io/sealos-apps/devbox-v2-server`
   - `ghcr.io/sealos-apps/devbox-v2-httpgate`
   - `ghcr.io/sealos-apps/devbox-v2-sshgate`
   The workflow keeps v1 and v2 image build jobs separate. `devbox-v1-cluster`
-  depends on v1 runtime image manifests, while `devbox-v2-frontend-cluster`
-  depends on v2 runtime image manifests.
+  depends on v1 runtime image manifests, while `devbox-v2-cluster`
+  depends on v2 runtime image manifests and packages controller, frontend,
+  httpgate, and sshgate.
   On `main`, it also uploads offline image packages for `devbox-v1-cluster`,
-  `devbox-v2-frontend-cluster`, and `devbox-v1-cri-shim-patch` to OSS.
+  `devbox-v2-cluster`, and `devbox-v1-cri-shim-patch` to OSS.
 - `Release`
   Triggers on `v*` tags, creates a GitHub Release, and uploads generated controller manifests plus `v1-cri-shim`, `v2-server`, `v2-httpgate`, and `v2-sshgate` release artifacts.
   The release flow keeps large offline image packages out of GitHub Release assets and uploads them to OSS instead.
 - `PR Images`
-  Builds pull request runtime images locally and validates both the v1 cluster image and the v2 frontend cluster image without pushing release artifacts.
+  Builds pull request runtime images locally and validates both the v1 cluster image and the aggregated v2 cluster image without pushing release artifacts.
 
 ## Trigger Rules
 
@@ -42,14 +43,19 @@ The workflows upload compressed `docker save` packages to OSS for offline distri
 
 - Main branch:
   - `ci/main/<short_sha>/devbox-v1-cluster-main-<short_sha>-<arch>.tar`
-  - `ci/main/<short_sha>/devbox-v2-frontend-cluster-main-<short_sha>-<arch>.tar`
+  - `ci/main/<short_sha>/devbox-v2-cluster-main-<short_sha>-<arch>.tar`
   - `ci/main/<short_sha>/devbox-v1-cri-shim-patch-main-<short_sha>-<arch>.tar`
 - Release tags:
   - `release/<tag>/devbox-v1-cluster-<tag>-<arch>.tar`
-  - `release/<tag>/devbox-v2-frontend-cluster-<tag>-<arch>.tar`
+  - `release/<tag>/devbox-v2-cluster-<tag>-<arch>.tar`
   - `release/<tag>/devbox-v1-cri-shim-patch-<tag>-<arch>.tar`
 
 Each package is uploaded with a matching `.md5` file.
+
+`devbox-v2-cluster` intentionally excludes `v2/server` for now. The server is
+still released as a deployment manifest artifact because `v2/server/deploy/devbox-api.yaml`
+contains environment-specific config such as JWT, SSH, gateway, and default image
+settings.
 
 ## Required GitHub Permissions
 

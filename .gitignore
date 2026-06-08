@@ -3,3 +3,5 @@ bin
 .vscode
 *.DS_Store
 /artifacts/
+/v2/deploy/components/
+/v2/deploy/registry_*/

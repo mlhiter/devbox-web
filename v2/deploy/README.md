@@ -19,6 +19,9 @@
 
 | 路径 | 作用 |
 | --- | --- |
+| `v2/deploy/Kubefile` | v2 聚合 Sealos 包入口，包含 controller、frontend、httpgate、sshgate |
+| `v2/deploy/install.sh` | v2 聚合包安装入口，按顺序安装 controller、httpgate、sshgate、frontend |
+| `v2/deploy/scripts/prepare-package.sh` | 发布前生成聚合包的临时 `components/` 目录，并写入运行时镜像 tag |
 | `v2/controller/deploy/Kubefile` | controller 的 Sealos 打包入口 |
 | `v2/controller/deploy/manifests/deploy.yaml` | controller 主清单，包含 namespace、CRD、controller RBAC、Service、DaemonSet、RuntimeClass |
 | `v2/controller/deploy/manifests/rbac.yaml` | `devbox-system` 下补充的 RoleBinding |
@@ -26,7 +29,8 @@
 | `v2/frontend/deploy/Kubefile` | frontend 的 Sealos 打包入口，调用 `install.sh` 安装 Helm chart |
 | `v2/frontend/deploy/charts/devbox-v2-frontend` | frontend Helm chart，包含 Secret、Deployment、Service、Ingress、App CR |
 
-`v2/deploy` 在补这份文档之前是空目录，所以这份 `README.md` 现在可以视为 v2 的总部署说明。
+`v2/deploy` 是 v2 聚合包入口，但 `v2/server` 当前仍以单独 manifest artifact 发布，
+没有纳入聚合 Sealos 包。
 
 ## 整体部署模型
 
@@ -405,7 +409,7 @@ spec:
 
 结合仓库现状，当前最明显的部署缺口有这几个：
 
-1. `v2/deploy` 下还没有统一的总 manifest，controller、server 和 frontend 还是分开部署的。
+1. `v2/deploy` 已经提供 controller、frontend、httpgate、sshgate 的聚合 Sealos 包入口，但 `v2/server` 仍是单独 manifest。
 2. 仓库里没有 `devbox snapshotter`、`stargz snapshotter` 以及 runtime handler 的节点侧安装清单。
 3. `v2/server` 当前默认固定写 `devbox-runtime`，create API 还不能切换到 `devbox-stargz-runtime`。
 4. `v2/server/deploy/devbox-api.yaml` 仍然更像一份环境示例，不适合完全不改直接上生产。
@@ -415,8 +419,8 @@ spec:
 如果按当前仓库状态走一条最短路径，建议是：
 
 1. 先在 DevBox 节点上准备好两套 runtime handler 和两套 snapshotter。
-2. 应用 `v2/controller/deploy/manifests`。
+2. 安装 `devbox-v2-cluster` 聚合 Sealos 包，或分别应用 `v2/controller/deploy/manifests` 并安装 frontend/httpgate/sshgate charts。
 3. 按环境修改后应用 `v2/server/deploy/devbox-api.yaml`。
-4. 用 `v2/frontend/deploy/install.sh` 或对应 Sealos 包安装 frontend chart。
+4. 如果没有使用聚合包，用 `v2/frontend/deploy/install.sh` 或对应 Sealos 包安装 frontend chart。
 5. 把 `devbox-runtime` 视为当前 API 创建流量的默认路径。
 6. 把 `devbox-stargz-runtime` 视为 controller 已支持、但暂时需要手动 CR 或补 server 能力才能走通的路径。
