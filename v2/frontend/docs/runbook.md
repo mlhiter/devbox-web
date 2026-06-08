@@ -46,6 +46,41 @@ There is no `test` script in `package.json` as of 2026-05-21. Use
 `pnpm ts-lint` for focused type verification unless a task provides another test
 command.
 
+## Helm Deployment
+
+The v2 frontend deployment package lives under `v2/frontend/deploy` and now uses
+the same chart-based shape as the other v2 deployable components:
+
+```bash
+cd /Users/mlhiter/labring/devbox/v2/frontend/deploy
+make lint
+helm template devbox-v2-frontend charts/devbox-v2-frontend --namespace devbox-frontend
+```
+
+The cluster image entrypoint runs `install.sh`, which creates or reuses:
+
+- chart defaults from `devbox-v2-frontend-values.yaml`
+- user overrides from `/root/.sealos/cloud/values/apps/devbox/devbox-v2-frontend-values.yaml`
+- global overrides from `/root/.sealos/cloud/values/global.yaml`
+
+Runtime credentials are rendered into the `devbox-frontend-runtime` Secret and
+loaded by the Deployment through `envFrom`. This Secret carries
+`REGISTRY_USER`, `REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET`.
+`install.sh` fails if registry user/password cannot be read from component
+values, environment variables, or `sealos-system/registry-config`; the chart
+does not provide default registry credentials.
+
+The chart keeps both the v2 frontend env contract and the existing compatibility
+keys used by older deployments. Key values to check after rendering are:
+
+- `METRICS_URL`
+- `STORAGE_LIMIT`
+- `APP_LAUNCHPAD_URL`
+- `ENABLE_ADVANCED_CONFIG`
+- `ENABLE_ADVANCED_ENV_AND_CONFIGMAP`
+- `GPU_SCHEDULER_MODE`
+- `STORAGE_DEFAULT`
+
 ## Registry Retag Smoke Check
 
 Template repository create/update depends on:
@@ -77,17 +112,25 @@ kubectl -n devbox-frontend get deploy devbox-frontend \
 curl -k -I https://devbox.192.168.10.70.nip.io
 ```
 
+Compare the live Deployment with the chart contract:
+
+```bash
+kubectl -n devbox-frontend get deploy devbox-frontend -o json | jq -r '
+  .spec.template.spec.containers[]
+  | select(.name=="devbox-frontend")
+  | "envFrom=" + ((.envFrom // []) | map(.secretRef.name) | join(",")),
+    (.env[]
+      | select(.name|test("METRICS_URL|STORAGE_LIMIT|APP_LAUNCHPAD_URL|ENABLE_ADVANCED_CONFIG|GPU_SCHEDULER_MODE|REGISTRY_ADDR"))
+      | .name + "=" + .value)
+'
+```
+
 Cluster 70 currently keeps runtime secrets in `devbox-frontend-runtime`. The
 Deployment should load it through `envFrom`, with at least
 `REGISTRY_USER`, `REGISTRY_PASSWORD`, and `DEVBOX_DOMAIN_CHALLENGE_SECRET`.
 
 The advanced env and ConfigMap editor is gated by `ENABLE_ADVANCED_CONFIG`.
-When the UI does not show those sections, confirm the live frontend env route:
-
-```bash
-curl -k https://devbox.192.168.10.70.nip.io/api/getEnv
-```
-
-The response should include `"enableAdvancedConfig":"true"`. Metrics should use
-the VictoriaMetrics select endpoint through `METRICS_URL`; pointing it at the
-legacy monitor service can return `Not found` for SDK queries.
+When the UI does not show those sections, first confirm the live Deployment has
+`ENABLE_ADVANCED_CONFIG=true`; the public `/api/getEnv` route requires a valid
+session, so unauthenticated curl returning `403` does not prove the env is
+missing.
