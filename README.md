@@ -117,11 +117,12 @@ You can override these at build or deploy time with `IMG=...` for controllers an
 
 ## Release
 
-GitHub Actions workflows live under [`.github/workflows`](./.github/workflows) and are split into three stages:
+GitHub Actions workflows live under [`.github/workflows`](./.github/workflows):
 
 - `CI`: validates `v1/v2` controllers, frontends, gateways/services, and the VS Code extension on pull requests and pushes to `main`
-- `Images`: builds and pushes GHCR images on `main` or manual dispatch, and uploads `main` branch v1 offline image packages to OSS
-- `Release`: builds release images on `v*` tags, publishes a GitHub Release with manifests/binaries/charts, and uploads v1 offline image packages to OSS
+- `PR Images`: validates pull request runtime and cluster image builds without publishing release artifacts
+- `Images`: builds and pushes GHCR images on `main` or manual dispatch, and uploads `main` branch offline image packages to OSS
+- `Release`: builds release images on `v*` tags, publishes a GitHub Release with manifests/binaries/charts, and uploads offline image packages to OSS
 
 Tagging a release such as `v1.2.3` will publish:
 
@@ -131,6 +132,7 @@ Tagging a release such as `v1.2.3` will publish:
 - `ghcr.io/sealos-apps/devbox-v1-cri-shim-patch:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-controller:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-frontend:v1.2.3`
+- `ghcr.io/sealos-apps/devbox-v2-frontend-cluster:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-server:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-httpgate:v1.2.3`
 - `ghcr.io/sealos-apps/devbox-v2-sshgate:v1.2.3`
@@ -143,6 +145,7 @@ The release workflow also uploads controller manifest bundles generated from:
 Large offline image packages are not attached to GitHub Releases. They are uploaded to OSS instead:
 
 - `release/<tag>/devbox-v1-cluster-<tag>-<arch>.tar`
+- `release/<tag>/devbox-v2-frontend-cluster-<tag>-<arch>.tar`
 - `release/<tag>/devbox-v1-cri-shim-patch-<tag>-<arch>.tar`
 
 If you need to publish manually, you can still run the local make targets:

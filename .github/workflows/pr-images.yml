@@ -19,6 +19,7 @@ concurrency:
 env:
   LOCAL_REGISTRY: 127.0.0.1:5000/devbox-pr
   LOCAL_SEALOS_IMAGE: devbox-v1-cluster-pr
+  LOCAL_V2_FRONTEND_SEALOS_IMAGE: devbox-v2-frontend-cluster-pr
 
 jobs:
   v1-runtime-images:
@@ -197,3 +198,83 @@ jobs:
       - name: Cleanup temporary local registry
         if: always()
         run: docker rm -f devbox-pr-registry >/dev/null 2>&1 || true
+
+  v2-frontend-cluster-image:
+    name: Build / v2-frontend-cluster / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)"
+          PR_TAG="pr-${{ github.event.pull_request.number }}-${SHORT_SHA}"
+          echo "pr_tag=${PR_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: v2/frontend
+          file: v2/frontend/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: devbox-v2-frontend:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-frontend-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-frontend-${{ matrix.arch }}
+
+      - name: Start temporary local registry
+        run: |
+          set -euo pipefail
+          docker rm -f devbox-v2-frontend-pr-registry >/dev/null 2>&1 || true
+          docker run -d -p 5000:5000 --name devbox-v2-frontend-pr-registry registry:2
+
+      - name: Push runtime image to temporary local registry
+        run: |
+          set -euo pipefail
+          PR_TAG="${{ steps.meta.outputs.pr_tag }}"
+          docker tag "devbox-v2-frontend:${PR_TAG}-${{ matrix.arch }}" "${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}"
+          docker push "${LOCAL_REGISTRY}/devbox-v2-frontend:${PR_TAG}"
+
+      - name: Install sealos
+        run: sudo bash ./.github/scripts/install-sealos.sh
+
+      - name: Validate chart and cache images for sealos
+        working-directory: v2/frontend/deploy
+        run: |
+          set -euo pipefail
+          PR_TAG="${{ steps.meta.outputs.pr_tag }}"
+          sed -i "s#^\([[:space:]]*repository:[[:space:]]*\)ghcr.io/.*/devbox-v2-frontend#\1${LOCAL_REGISTRY}/devbox-v2-frontend#" charts/devbox-v2-frontend/values.yaml
+          sed -i "s#^\([[:space:]]*tag:[[:space:]]*\).*#\1${PR_TAG}#" charts/devbox-v2-frontend/values.yaml
+          make lint
+          sudo sealos registry save --registry-dir=registry_${{ matrix.arch }} --arch ${{ matrix.arch }} .
+
+      - name: Build cluster image
+        uses: docker/build-push-action@v6
+        with:
+          context: v2/frontend/deploy
+          file: v2/frontend/deploy/Kubefile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: ${{ env.LOCAL_V2_FRONTEND_SEALOS_IMAGE }}:${{ steps.meta.outputs.pr_tag }}-${{ matrix.arch }}
+          cache-from: type=gha,scope=pr-devbox-v2-frontend-cluster-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=pr-devbox-v2-frontend-cluster-${{ matrix.arch }}
+
+      - name: Cleanup temporary local registry
+        if: always()
+        run: docker rm -f devbox-v2-frontend-pr-registry >/dev/null 2>&1 || true
