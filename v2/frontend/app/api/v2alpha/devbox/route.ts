@@ -553,7 +553,8 @@ export async function POST(req: NextRequest) {
     }
 
     const resourceConfig = convertResourceConfig(devboxForm.quota);
-    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, DEVBOX_RUNTIME_CLASS_NAME } = process.env;
+    const { DEVBOX_AFFINITY_ENABLE, STORAGE_LIMIT, GPU_SCHEDULER_MODE, DEVBOX_RUNTIME_CLASS_NAME } =
+      process.env;
     const devbox = json2Devbox(
       {
         ...devboxForm,
@@ -566,7 +567,7 @@ export async function POST(req: NextRequest) {
       },
       DEVBOX_AFFINITY_ENABLE,
       STORAGE_LIMIT,
-      undefined,
+      GPU_SCHEDULER_MODE,
       DEVBOX_RUNTIME_CLASS_NAME
     );
 
