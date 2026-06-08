@@ -101,6 +101,16 @@ If retagging fails immediately with `Registry HTTP endpoints are not supported`,
 remove the `http://` scheme from `REGISTRY_ADDR` or switch it to an HTTPS
 registry endpoint.
 
+## Desktop Quota Bridge Compatibility
+
+Create, import, and create-page submit actions use the shared SDK quota guard.
+Some customer Desktop deployments do not declare `account.getWorkspaceQuota` and
+reply with `function is not declare`; in that case `utils/workspaceQuota.ts`
+caches the unsupported signal and returns an empty quota list so the guarded
+action can continue. Do not add an env switch for this case. If creation still
+fails after the click reaches the create page or `/api/createDevbox`, inspect the
+API response and Kubernetes quota state separately.
+
 ## Cluster 70 Notes
 
 Use the named kubeconfig and namespace when checking the live frontend:

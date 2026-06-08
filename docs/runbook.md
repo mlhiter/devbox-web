@@ -98,6 +98,12 @@ make build
 
 ## Troubleshooting
 
+- Create DevBox click does nothing and the browser console shows
+  `function is not declare`: the customer Desktop likely does not provide the
+  `account.getWorkspaceQuota` bridge. The v2 frontend should skip the
+  client-side quota guard through `utils/workspaceQuota.ts`; verify the deployed
+  image includes that adapter and that later failures, if any, come from
+  `/api/createDevbox` or Kubernetes quota enforcement.
 - GPU inventory missing: check `GPU_ENABLE`, `GPU_SCHEDULER_MODE`, and the `node-system/node-gpu-info` ConfigMap.
 - DevBox pods fail after changing RuntimeClass: confirm the cluster has the matching RuntimeClass, runtime handler, and snapshotter installed; the controller manifest creates the RuntimeClass objects, but node runtime support must exist separately.
 - Quota errors look like permissions errors: inspect `services/backend/response.ts` mapping and the raw Kubernetes status message.

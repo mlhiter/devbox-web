@@ -1,7 +1,7 @@
 'use client';
 
 import throttle from 'lodash/throttle';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { EVENT_NAME } from '@labring/sealos-desktop-sdk';
 import { usePathname, useRouter } from '@/i18n';
 import { useSearchParams } from 'next/navigation';
@@ -17,6 +17,7 @@ import { usePriceStore } from '@/stores/price';
 import { useGlobalStore } from '@/stores/global';
 import { getLangStore, setLangStore } from '@/utils/cookie';
 import { cleanSession, setSessionToSessionStorage } from '@/utils/user';
+import { createQuotaCompatibleSealosApp } from '@/utils/workspaceQuota';
 
 import { Toaster } from '@labring/sealos-ui/sonner';
 import RouteHandlerProvider from '@/components/providers/MyRouteHandlerProvider';
@@ -41,6 +42,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   const [init, setInit] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const locale = useLocale();
+  const quotaCompatibleSealosApp = useMemo(() => createQuotaCompatibleSealosApp(sealosApp), []);
 
   const getSession = useCallback(() => {
     return useUserStore.getState().session ?? null;
@@ -149,7 +151,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
   }, [router, searchParams]);
 
   return (
-    <QuotaGuardProvider getSession={getSession} sealosApp={sealosApp}>
+    <QuotaGuardProvider getSession={getSession} sealosApp={quotaCompatibleSealosApp}>
       <RouteHandlerProvider>
         <ConfirmChild />
         <Toaster />

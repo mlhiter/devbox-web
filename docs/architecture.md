@@ -32,6 +32,13 @@ v2 frontend changes should preserve:
 - `mergeBaseImageTopLayer` handling for create/edit YAML generation.
 - `@labring/sealos-shared-sdk` quota guard behavior in create/edit UI.
 
+The v2 frontend wraps the Desktop SDK passed into `QuotaGuardProvider` with a
+small compatibility adapter. If the customer Desktop does not declare
+`account.getWorkspaceQuota` and replies with `function is not declare`, the
+frontend treats workspace quota as unsupported for the session and bypasses only
+the client-side quota guard. Environments with the bridge still use the shared
+SDK quota dialog, and backend/Kubernetes quota enforcement remains unchanged.
+
 ## GPU Scheduling
 
 GPU frontend logic supports two scheduler modes:
