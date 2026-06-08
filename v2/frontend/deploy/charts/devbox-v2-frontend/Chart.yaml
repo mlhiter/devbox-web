@@ -1,0 +1,6 @@
+apiVersion: v2
+name: devbox-v2-frontend
+description: DevBox v2 frontend Sealos deployment
+type: application
+version: 0.1.0
+appVersion: "latest"

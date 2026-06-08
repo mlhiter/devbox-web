@@ -2,16 +2,15 @@
 
 ## 文档范围
 
-这份文档用于梳理当前仓库里 DevBox v2 的部署方式，只覆盖下面三部分：
+这份文档用于梳理当前仓库里 DevBox v2 的部署方式，覆盖下面几部分：
 
 - `v2/controller`
 - `v2/server`
+- `v2/frontend`
 - `devbox snapshotter` 和 `stargz` 两条运行路径
 
 这份文档暂时不覆盖：
 
-- `v2/frontend`
-- 前端页面和前端 ingress
 - 节点侧 containerd runtime handler / snapshotter 插件的安装过程
 
 ## 仓库里的部署入口
@@ -24,6 +23,8 @@
 | `v2/controller/deploy/manifests/deploy.yaml` | controller 主清单，包含 namespace、CRD、controller RBAC、Service、DaemonSet、RuntimeClass |
 | `v2/controller/deploy/manifests/rbac.yaml` | `devbox-system` 下补充的 RoleBinding |
 | `v2/server/deploy/devbox-api.yaml` | `devbox-server` 的 namespace、配置、RBAC、Deployment、Service |
+| `v2/frontend/deploy/Kubefile` | frontend 的 Sealos 打包入口，调用 `install.sh` 安装 Helm chart |
+| `v2/frontend/deploy/charts/devbox-v2-frontend` | frontend Helm chart，包含 Secret、Deployment、Service、Ingress、App CR |
 
 `v2/deploy` 在补这份文档之前是空目录，所以这份 `README.md` 现在可以视为 v2 的总部署说明。
 
@@ -42,6 +43,10 @@
 3. API 层
 
    `v2/server` 以 Deployment 的方式部署，向外提供 REST API，包括 create、pause、resume、destroy、exec、文件上传下载，以及 gateway 反向代理能力。
+
+4. 前端层
+
+   `v2/frontend` 以 Helm chart 部署到 `devbox-frontend` namespace，负责页面、Next.js route handlers、模板仓库、监控查询、AppLaunchpad 发布入口和 DevBox 高级配置 UI。
 
 ## 部署前提
 
@@ -300,6 +305,73 @@ curl -sS http://127.0.0.1:8090/healthz
 {"code":200,"message":"ok","data":{"status":"healthy"}}
 ```
 
+## v2 frontend 部署
+
+### frontend chart 里已经包含什么
+
+`v2/frontend/deploy/charts/devbox-v2-frontend` 当前会创建：
+
+- Secret `devbox-frontend-runtime`
+- ConfigMap `devbox-frontend-config`
+- Deployment `devbox-frontend`
+- Service `devbox-frontend`
+- Ingress `devbox-frontend`
+- Ingress `devbox-challenge`
+- App CR `app-system/devbox`
+
+frontend 的 Sealos 包入口是 `v2/frontend/deploy/Kubefile`。它会复制
+`install.sh`、`devbox-v2-frontend-values.yaml` 和 `charts/`，然后执行：
+
+```bash
+bash install.sh
+```
+
+### frontend 运行时配置
+
+`install.sh` 会读取：
+
+- `/root/.sealos/cloud/values/apps/devbox/devbox-v2-frontend-values.yaml`
+- `/root/.sealos/cloud/values/global.yaml`
+- `sealos-system/sealos-config`
+- `sealos-system/registry-config`
+- `sealos-system/devbox-config`
+
+这些值会汇总成 Helm overrides。关键字段包括：
+
+- `METRICS_URL`：默认是 VictoriaMetrics select endpoint `http://vmselect-vm-stack-victoria-metrics-k8s-stack.vm.svc.cluster.local:8481/select/0/prometheus`
+- `STORAGE_LIMIT`：默认 `20Gi`
+- `APP_LAUNCHPAD_URL`：默认 `http://applaunchpad-frontend.applaunchpad-frontend.svc.cluster.local:3000/api/v1alpha`
+- `ENABLE_ADVANCED_CONFIG`：默认 `true`，控制高级 Env/ConfigMap UI
+- `GPU_SCHEDULER_MODE`：默认 `native`，可按集群改为 `hami`
+- `REGISTRY_USER` / `REGISTRY_PASSWORD` / `DEVBOX_DOMAIN_CHALLENGE_SECRET`：写入 `devbox-frontend-runtime` Secret，并通过 `envFrom` 注入 Deployment
+
+`REGISTRY_USER` 和 `REGISTRY_PASSWORD` 必须来自组件 values、环境变量或
+`sealos-system/registry-config`；`install.sh` 不会生成默认 registry 凭据。
+
+### frontend 推荐检查
+
+本地渲染检查：
+
+```bash
+cd v2/frontend/deploy
+make lint
+helm template devbox-v2-frontend charts/devbox-v2-frontend --namespace devbox-frontend
+```
+
+集群侧检查：
+
+```bash
+kubectl -n devbox-frontend rollout status deployment/devbox-frontend --timeout=10m
+kubectl -n devbox-frontend get deploy devbox-frontend -o json | jq -r '
+  .spec.template.spec.containers[]
+  | select(.name=="devbox-frontend")
+  | "envFrom=" + ((.envFrom // []) | map(.secretRef.name) | join(",")),
+    (.env[]
+      | select(.name|test("METRICS_URL|STORAGE_LIMIT|APP_LAUNCHPAD_URL|ENABLE_ADVANCED_CONFIG|GPU_SCHEDULER_MODE|REGISTRY_ADDR"))
+      | .name + "=" + .value)
+'
+```
+
 ## 两条 snapshotter 路径怎么用
 
 ### 路径 A：`devbox snapshotter`
@@ -333,7 +405,7 @@ spec:
 
 结合仓库现状，当前最明显的部署缺口有这几个：
 
-1. `v2/deploy` 下还没有统一的总 manifest，controller 和 server 还是分开部署的。
+1. `v2/deploy` 下还没有统一的总 manifest，controller、server 和 frontend 还是分开部署的。
 2. 仓库里没有 `devbox snapshotter`、`stargz snapshotter` 以及 runtime handler 的节点侧安装清单。
 3. `v2/server` 当前默认固定写 `devbox-runtime`，create API 还不能切换到 `devbox-stargz-runtime`。
 4. `v2/server/deploy/devbox-api.yaml` 仍然更像一份环境示例，不适合完全不改直接上生产。
@@ -345,5 +417,6 @@ spec:
 1. 先在 DevBox 节点上准备好两套 runtime handler 和两套 snapshotter。
 2. 应用 `v2/controller/deploy/manifests`。
 3. 按环境修改后应用 `v2/server/deploy/devbox-api.yaml`。
-4. 把 `devbox-runtime` 视为当前 API 创建流量的默认路径。
-5. 把 `devbox-stargz-runtime` 视为 controller 已支持、但暂时需要手动 CR 或补 server 能力才能走通的路径。
+4. 用 `v2/frontend/deploy/install.sh` 或对应 Sealos 包安装 frontend chart。
+5. 把 `devbox-runtime` 视为当前 API 创建流量的默认路径。
+6. 把 `devbox-stargz-runtime` 视为 controller 已支持、但暂时需要手动 CR 或补 server 能力才能走通的路径。
