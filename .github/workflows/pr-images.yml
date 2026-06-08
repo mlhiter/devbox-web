@@ -33,37 +33,37 @@ jobs:
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: controller
             image_name: devbox-v1-controller
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
             dockerfile: v1/cri-shim/patch/Dockerfile
             context: v1/cri-shim
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
             dockerfile: v1/cri-shim/patch/Dockerfile
             context: v1/cri-shim
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -106,9 +106,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5

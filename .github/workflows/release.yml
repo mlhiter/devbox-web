@@ -30,37 +30,37 @@ jobs:
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v1-controller
             image_name: devbox-v1-controller
             dockerfile: v1/controller/Dockerfile
             context: v1/controller
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v1-frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v1-frontend
             image_name: devbox-v1-frontend
             dockerfile: v1/frontend/Dockerfile
             context: v1/frontend
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v1-cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
             dockerfile: v1/cri-shim/patch/Dockerfile
             context: v1/cri-shim
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v1-cri-shim-patch
             image_name: devbox-v1-cri-shim-patch
             dockerfile: v1/cri-shim/patch/Dockerfile
             context: v1/cri-shim
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -103,7 +103,7 @@ jobs:
 
   v1-image-manifests:
     name: Release Manifest / v1 / ${{ matrix.image_name }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     needs:
       - v1-images
     strategy:
@@ -154,25 +154,25 @@ jobs:
             dockerfile: v2/controller/Dockerfile
             context: v2/controller
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v2-controller
             image_name: devbox-v2-controller
             dockerfile: v2/controller/Dockerfile
             context: v2/controller
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v2-frontend
             image_name: devbox-v2-frontend
             dockerfile: v2/frontend/Dockerfile
             context: v2/frontend
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v2-frontend
             image_name: devbox-v2-frontend
             dockerfile: v2/frontend/Dockerfile
             context: v2/frontend
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v2-server
             image_name: devbox-v2-server
             dockerfile: v2/server/Dockerfile
@@ -180,7 +180,7 @@ jobs:
             build_contexts: |
               controller=v2/controller
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v2-server
             image_name: devbox-v2-server
             dockerfile: v2/server/Dockerfile
@@ -188,31 +188,31 @@ jobs:
             build_contexts: |
               controller=v2/controller
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v2-httpgate
             image_name: devbox-v2-httpgate
             dockerfile: v2/httpgate/Dockerfile
             context: v2/httpgate
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v2-httpgate
             image_name: devbox-v2-httpgate
             dockerfile: v2/httpgate/Dockerfile
             context: v2/httpgate
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
           - name: v2-sshgate
             image_name: devbox-v2-sshgate
             dockerfile: v2/sshgate/Dockerfile
             context: v2/sshgate
             arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - name: v2-sshgate
             image_name: devbox-v2-sshgate
             dockerfile: v2/sshgate/Dockerfile
             context: v2/sshgate
             arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -262,7 +262,7 @@ jobs:
 
   v2-image-manifests:
     name: Release Manifest / v2 / ${{ matrix.image_name }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     needs:
       - v2-images
     strategy:
@@ -313,9 +313,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -412,7 +412,7 @@ jobs:
 
   v1-cluster-manifest:
     name: Release Image / v1-cluster manifest
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     needs:
       - v1-cluster-image
     steps:
@@ -446,9 +446,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: namespace-profile-sealos-apps-amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: namespace-profile-sealos-apps-arm64
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -498,7 +498,7 @@ jobs:
 
   controller-manifests:
     name: Controller Manifest / ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     needs:
       - v1-image-manifests
       - v2-image-manifests
@@ -539,7 +539,7 @@ jobs:
 
   v1-cri-shim-binaries:
     name: Release Binary / v1-cri-shim
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: v1/cri-shim
@@ -567,7 +567,7 @@ jobs:
 
   v2-server-binaries:
     name: Release Binary / v2-server
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     strategy:
       fail-fast: false
       matrix:
@@ -599,7 +599,7 @@ jobs:
 
   v2-httpgate-chart:
     name: Release Artifact / v2-httpgate-chart
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     env:
       HTTPGATE_APP_VERSION: ${{ github.ref_name }}
       HTTPGATE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/devbox-v2-httpgate
@@ -626,7 +626,7 @@ jobs:
 
   v2-sshgate-chart:
     name: Release Artifact / v2-sshgate-chart
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     env:
       SSHGATE_APP_VERSION: ${{ github.ref_name }}
       SSHGATE_IMAGE: ghcr.io/${{ github.repository_owner }}/devbox-v2-sshgate:${{ github.ref_name }}
@@ -653,7 +653,7 @@ jobs:
 
   v2-server-manifest:
     name: Release Artifact / v2-server-manifest
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     env:
       SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/devbox-v2-server:${{ github.ref_name }}
     steps:
@@ -675,7 +675,7 @@ jobs:
 
   github-release:
     name: GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     needs:
       - v1-image-manifests
       - v2-image-manifests

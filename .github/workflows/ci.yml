@@ -19,7 +19,7 @@ env:
 jobs:
   controller:
     name: Controller / ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +46,7 @@ jobs:
 
   server:
     name: Server / v2
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: v2/server
@@ -68,7 +68,7 @@ jobs:
 
   httpgate:
     name: HTTP Gate / v2
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: v2/httpgate
@@ -92,7 +92,7 @@ jobs:
 
   sshgate:
     name: SSH Gate / v2
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: v2/sshgate
@@ -116,7 +116,7 @@ jobs:
 
   cri-shim:
     name: CRI Shim / v1
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: v1/cri-shim
@@ -138,7 +138,7 @@ jobs:
 
   frontend:
     name: Frontend / ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +173,7 @@ jobs:
 
   vscode-extension:
     name: VS Code Extension
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-sealos-apps-amd64
     defaults:
       run:
         working-directory: extensions/vscode
